@@ -85,6 +85,7 @@ final class NotchController {
     private var closeWork: DispatchWorkItem?
     private var openWork: DispatchWorkItem?
     private var menuTracking = false
+    private var pollTimer: Timer?
     private var bag = Set<AnyCancellable>()
     private static let panelSize = CGSize(width: 640, height: 500)
     private static let openDwell: TimeInterval = 0.15
@@ -128,6 +129,14 @@ final class NotchController {
             MainActor.assumeIsolated { self?.trackMouse() }
             return e
         }) { monitors.append(l) }
+
+        // Backstop for the event monitors: global mouse events aren't delivered in some states
+        // (another app's menu is open, right after a Space switch, the cursor pinned at the edge).
+        // Reading the cursor position is trivial, so check it 20×/s as well.
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.trackMouse() }
+        }
+        pollTimer?.tolerance = 0.02
     }
 
     private func applySpaceBehavior(showInFullScreen: Bool) {
@@ -151,6 +160,13 @@ final class NotchController {
         return NSRect(x: f.midX - n.width / 2 - 4, y: f.maxY - n.height, width: n.width + 8, height: n.height)
     }
 
+    /// Like `NSRect.contains`, but counts the top screen edge as inside. When the cursor is pushed
+    /// against the top of the screen, `NSEvent.mouseLocation.y == screenFrame.maxY` exactly, which
+    /// `contains` rejects — that made "nudging" up into the notch fail.
+    private func hits(_ r: NSRect, _ p: NSPoint) -> Bool {
+        p.x >= r.minX && p.x <= r.maxX && p.y >= r.minY && p.y <= r.maxY + 1
+    }
+
     /// The visible black shape while open, in screen coordinates.
     private var openShapeRect: NSRect {
         let f = vm.geometry.screenFrame
@@ -164,11 +180,11 @@ final class NotchController {
         let buttonDown = NSEvent.pressedMouseButtons != 0
 
         if vm.isOpen {
-            let overShape = openShapeRect.contains(p)
+            let overShape = hits(openShapeRect, p)
             // Only the visible shape takes clicks; the rest of the window is click-through.
             panel.ignoresMouseEvents = !overShape
             // A little slack before closing so small overshoots don't snap it shut.
-            if overShape || openShapeRect.insetBy(dx: -10, dy: -10).contains(p) || menuTracking {
+            if overShape || hits(openShapeRect.insetBy(dx: -10, dy: -10), p) || menuTracking {
                 closeWork?.cancel(); closeWork = nil
             } else if closeWork == nil, !buttonDown {
                 let work = DispatchWorkItem { [weak self] in
@@ -181,14 +197,14 @@ final class NotchController {
         }
 
         panel.ignoresMouseEvents = true
-        if notchTriggerRect.contains(p), !buttonDown {
+        if hits(notchTriggerRect, p), !buttonDown {
             guard openWork == nil else { return }
             let work = DispatchWorkItem { [weak self] in
                 MainActor.assumeIsolated {
                     guard let self else { return }
                     self.openWork = nil
                     // Still resting on the notch and not dragging? Then open.
-                    if self.notchTriggerRect.contains(NSEvent.mouseLocation), NSEvent.pressedMouseButtons == 0 {
+                    if self.hits(self.notchTriggerRect, NSEvent.mouseLocation), NSEvent.pressedMouseButtons == 0 {
                         self.setOpen(true)
                     }
                 }
@@ -205,6 +221,6 @@ final class NotchController {
         withAnimation(open ? .spring(response: 0.42, dampingFraction: 0.8) : .spring(response: 0.45, dampingFraction: 1.0)) {
             vm.isOpen = open
         }
-        panel.ignoresMouseEvents = !(open && openShapeRect.contains(NSEvent.mouseLocation))
+        panel.ignoresMouseEvents = !(open && hits(openShapeRect, NSEvent.mouseLocation))
     }
 }
