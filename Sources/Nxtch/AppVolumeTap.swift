@@ -76,7 +76,7 @@ final class AppVolumeTap {
     private var tapID = AudioObjectID(kAudioObjectUnknown)
     private var aggregateID = AudioObjectID(kAudioObjectUnknown)
     private var ioProcID: AudioDeviceIOProcID?
-    private let queue = DispatchQueue(label: "notchmixer.tap", qos: .userInteractive)
+    private let queue = DispatchQueue(label: "nxtch.tap", qos: .userInteractive)
 
     init(processObjects: Set<AudioObjectID>, outputUID: String, passthrough: Bool, state: TapState) throws {
         self.processObjects = processObjects
@@ -91,14 +91,14 @@ final class AppVolumeTap {
     private func start() throws {
         let desc = CATapDescription(stereoMixdownOfProcesses: Array(processObjects))
         desc.uuid = UUID()
-        desc.name = "NotchMixer tap"
+        desc.name = "nxtch tap"
         desc.isPrivate = true
         desc.muteBehavior = passthrough ? .unmuted : .mutedWhenTapped
         try check(AudioHardwareCreateProcessTap(desc, &tapID), "Creating process tap")
 
         let aggregate: [String: Any] = [
-            kAudioAggregateDeviceNameKey: "NotchMixer",
-            kAudioAggregateDeviceUIDKey: "dev.notchmixer.aggregate.\(UUID().uuidString)",
+            kAudioAggregateDeviceNameKey: "nxtch",
+            kAudioAggregateDeviceUIDKey: "dev.nxtch.aggregate.\(UUID().uuidString)",
             kAudioAggregateDeviceMainSubDeviceKey: outputUID,
             kAudioAggregateDeviceIsPrivateKey: true,
             kAudioAggregateDeviceIsStackedKey: false,

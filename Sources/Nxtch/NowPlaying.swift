@@ -12,13 +12,11 @@ struct NowPlayingInfo: Equatable {
     var duration: Double?
     var timestamp: Date?
     var rate: Double
-    var artwork: NSImage?
-    var artworkKey: Int
 
     static func == (a: Self, b: Self) -> Bool {
         a.title == b.title && a.artist == b.artist && a.album == b.album && a.bundleID == b.bundleID
             && a.isPlaying == b.isPlaying && a.elapsed == b.elapsed && a.duration == b.duration
-            && a.timestamp == b.timestamp && a.artworkKey == b.artworkKey
+            && a.timestamp == b.timestamp
     }
 
     /// Whether this media belongs to the app with the given bundle ID.
@@ -41,8 +39,16 @@ struct NowPlayingInfo: Equatable {
 @MainActor
 final class NowPlayingMonitor: ObservableObject {
     @Published private(set) var info: NowPlayingInfo?
-    /// Set when a media-key press failed because Accessibility permission is missing.
-    @Published var controlsNeedPermission = false
+    /// Sends a media command and updates the play state right away (the helper confirms within ~1 s).
+    func send(_ key: MediaKey) {
+        key.send()
+        if key == .playPause, var i = info {
+            if i.isPlaying, let pos = i.position() { i.elapsed = pos }   // freeze progress where it is
+            i.isPlaying.toggle()
+            i.timestamp = Date()
+            info = i
+        }
+    }
 
     private var process: Process?
     private var buffer = Data()
@@ -68,7 +74,7 @@ final class NowPlayingMonitor: ObservableObject {
                 MainActor.assumeIsolated { self?.launch() } // helper died → restart
             }
         }
-        do { try p.run(); process = p } catch { NSLog("NotchMixer: now-playing helper failed: \(error)") }
+        do { try p.run(); process = p } catch { NSLog("nxtch: now-playing helper failed: \(error)") }
     }
 
     private func consume(_ data: Data) {
@@ -83,10 +89,6 @@ final class NowPlayingMonitor: ObservableObject {
 
     private func handle(_ o: [String: Any]) {
         guard let title = o["title"] as? String, !title.isEmpty else { info = nil; return }
-        let artB64 = o["artwork"] as? String
-        let key = artB64?.hashValue ?? 0
-        var artwork = info?.artworkKey == key ? info?.artwork : nil
-        if artwork == nil, let artB64, let d = Data(base64Encoded: artB64) { artwork = NSImage(data: d) }
         info = NowPlayingInfo(
             title: title,
             artist: (o["artist"] as? String).flatMap { $0.isEmpty ? nil : $0 },
@@ -97,9 +99,7 @@ final class NowPlayingMonitor: ObservableObject {
             elapsed: o["elapsed"] as? Double,
             duration: (o["duration"] as? Double).flatMap { $0 > 0 ? $0 : nil },
             timestamp: (o["timestamp"] as? Double).map { Date(timeIntervalSince1970: $0) },
-            rate: o["rate"] as? Double ?? 1,
-            artwork: artwork,
-            artworkKey: key)
+            rate: o["rate"] as? Double ?? 1)
     }
 
     private static let script = #"""
@@ -128,8 +128,6 @@ final class NowPlayingMonitor: ObservableObject {
               out.rate = str(info, 'kMRMediaRemoteNowPlayingInfoPlaybackRate');
               const ts = info.objectForKey('kMRMediaRemoteNowPlayingInfoTimestamp');
               if (!ts.isNil()) out.timestamp = ts.timeIntervalSince1970;
-              const art = info.objectForKey('kMRMediaRemoteNowPlayingInfoArtworkData');
-              if (!art.isNil()) out.artwork = ObjC.unwrap(art.base64EncodedStringWithOptions(0));
             }
           }
           const path = R.localNowPlayingPlayerPath;

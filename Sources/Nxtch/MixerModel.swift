@@ -14,6 +14,13 @@ struct AppEntry: Identifiable, Equatable {
     }
 }
 
+/// Which apps get a listen-only metering tap (volume taps are unaffected).
+enum MeterScope: Equatable {
+    case none       // no meters visible
+    case primary    // closed notch with ears: just the app shown in the ears
+    case all        // media tab open: every playing app
+}
+
 @MainActor
 final class MixerModel: ObservableObject {
     @Published private(set) var apps: [AppEntry] = []
@@ -30,20 +37,37 @@ final class MixerModel: ObservableObject {
 
     var anyPlaying: Bool { apps.contains { $0.isPlaying } }
 
+    /// Taps cost CPU here and in coreaudiod, so meters only run where they're visible.
+    var meterScope: MeterScope = .primary {
+        didSet { if meterScope != oldValue { resync() } }
+    }
+    /// Lets the model know which app owns the now-playing media (for `.primary`).
+    var isNowPlayingOwner: (AppEntry) -> Bool = { _ in false }
+
+    /// The app the closed notch shows: the now-playing owner if it's playing, else the first playing app.
+    var primaryApp: AppEntry? {
+        apps.first { $0.isPlaying && isNowPlayingOwner($0) } ?? apps.first(where: \.isPlaying)
+    }
+
+    private var listenedProcesses = Set<AudioObjectID>()
+    private var refreshPending = false
+
     init() {
         volumes = (defaults.dictionary(forKey: "volumes") as? [String: Float]) ?? [:]
         muted = Set(defaults.stringArray(forKey: "muted") ?? [])
         refresh()
         CA.listen(CA.system, kAudioHardwarePropertyProcessObjectList) { [weak self] in
-            MainActor.assumeIsolated { self?.refresh() }
+            MainActor.assumeIsolated { self?.scheduleRefresh() }
         }
         CA.listen(CA.system, kAudioHardwarePropertyDefaultOutputDevice) { [weak self] in
             MainActor.assumeIsolated { self?.outputChanged() }
         }
-        // IsRunningOutput changes per process; a cheap poll keeps the "playing" state fresh.
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+        // Changes arrive as Core Audio notifications (process list + each process's
+        // IsRunningOutput). This slow timer is only a safety net and ages out "recently played".
+        timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.refresh() }
         }
+        timer?.tolerance = 1
     }
 
     // MARK: Public
@@ -83,11 +107,33 @@ final class MixerModel: ObservableObject {
     /// - custom gain → volume tap (original muted, re-played at gain, also meters)
     /// - 100% but playing → listen-only tap for metering
     /// - otherwise → no tap
+    private func wantsMeter(_ id: String) -> Bool {
+        switch meterScope {
+        case .none: return false
+        case .all: return true
+        case .primary: return primaryApp?.id == id
+        }
+    }
+
+    private func resync() {
+        let uid = CA.deviceUID(CA.defaultOutputDevice)
+        for app in apps { apply(app.id, outputUID: uid) }
+    }
+
+    /// Coalesces bursts of Core Audio notifications into one refresh.
+    private func scheduleRefresh() {
+        guard !refreshPending else { return }
+        refreshPending = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            MainActor.assumeIsolated { self?.refreshPending = false; self?.refresh() }
+        }
+    }
+
     private func apply(_ id: String, outputUID: String?) {
         let gain = effectiveGain(id)
         let needsVolume = abs(gain - 1) > 0.001
         guard let entry = apps.first(where: { $0.id == id }), !entry.processObjects.isEmpty,
-              needsVolume || entry.isPlaying, let outputUID else {
+              needsVolume || (entry.isPlaying && wantsMeter(id)), let outputUID else {
             taps[id] = nil
             return
         }
@@ -105,7 +151,7 @@ final class MixerModel: ObservableObject {
             lastError = nil
         } catch {
             lastError = "\(entry.name): \(error)"
-            NSLog("NotchMixer: \(error)")
+            NSLog("nxtch: \(error)")
         }
     }
 
@@ -123,7 +169,17 @@ final class MixerModel: ObservableObject {
         let me = ProcessInfo.processInfo.processIdentifier
         var grouped: [String: AppEntry] = [:]
 
-        for proc in AudioProcess.all() where proc.pid != me {
+        let processes = AudioProcess.all()
+        // Listen for each process starting/stopping output instead of polling.
+        let current = Set(processes.map(\.objectID))
+        for proc in processes where !listenedProcesses.contains(proc.objectID) {
+            CA.listen(proc.objectID, kAudioProcessPropertyIsRunningOutput) { [weak self] in
+                MainActor.assumeIsolated { self?.scheduleRefresh() }
+            }
+        }
+        listenedProcesses = current
+
+        for proc in processes where proc.pid != me {
             let owner = NSRunningApplication(processIdentifier: ResponsiblePID.of(proc.pid))
                 ?? NSRunningApplication(processIdentifier: proc.pid)
             guard let app = owner, app.activationPolicy == .regular,

@@ -2,12 +2,12 @@
 import PackageDescription
 
 let package = Package(
-    name: "NotchMixer",
+    name: "Nxtch",
     platforms: [.macOS("14.2")],
     targets: [
         .executableTarget(
-            name: "NotchMixer",
-            path: "Sources/NotchMixer",
+            name: "Nxtch",
+            path: "Sources/Nxtch",
             linkerSettings: [
                 .linkedFramework("CoreAudio"),
                 .linkedFramework("AudioToolbox"),
