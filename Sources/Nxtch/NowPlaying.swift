@@ -1,6 +1,10 @@
 import AppKit
 import Combine
 
+// Since macOS 15.4 the private MediaRemote framework only answers Apple-signed processes, so
+// nxtch talks to it through one: /usr/bin/osascript running JXA. A long-running helper reports
+// what's playing; each playback button runs a short one-shot script.
+
 struct NowPlayingInfo: Equatable {
     var title: String
     var artist: String?
@@ -13,13 +17,6 @@ struct NowPlayingInfo: Equatable {
     var timestamp: Date?
     var rate: Double
 
-    static func == (a: Self, b: Self) -> Bool {
-        a.title == b.title && a.artist == b.artist && a.album == b.album && a.bundleID == b.bundleID
-            && a.isPlaying == b.isPlaying && a.elapsed == b.elapsed && a.duration == b.duration
-            && a.timestamp == b.timestamp
-    }
-
-    /// Whether this media belongs to the app with the given bundle ID.
     func belongs(to appID: String) -> Bool { bundleID == appID || parentBundleID == appID }
 
     /// Playback position extrapolated to `date`.
@@ -31,18 +28,28 @@ struct NowPlayingInfo: Equatable {
     }
 }
 
-/// Reads the system "Now Playing" info.
-///
-/// Since macOS 15.4 the private MediaRemote API only answers Apple-signed processes, so — like
-/// boring.notch — we ask through an Apple-signed binary: a long-running `osascript` (JXA) helper
-/// that prints a JSON line whenever the now-playing state changes.
+enum MediaKey: Int32 {
+    case playPause = 2   // kMRTogglePlayPause
+    case next = 4        // kMRNextTrack
+    case previous = 5    // kMRPreviousTrack
+}
+
 @MainActor
 final class NowPlayingMonitor: ObservableObject {
     @Published private(set) var info: NowPlayingInfo?
-    /// Sends a media command and updates the play state right away (the helper confirms within ~1 s).
+
+    private var process: Process?
+    private var buffer = Data()
+    private var restartDelay: TimeInterval = 2
+
+    init() { launch() }
+
+    func stop() { process?.terminationHandler = nil; process?.terminate() }
+
+    /// Sends a media command and flips the play state right away (the helper confirms within ~1 s).
     func send(_ key: MediaKey) {
         Log.notch.info("media command \(key.rawValue, privacy: .public)")
-        key.send()
+        _ = Self.osascript(Self.commandScript, String(key.rawValue))
         if key == .playPause, var i = info {
             if i.isPlaying, let pos = i.position() { i.elapsed = pos }   // freeze progress where it is
             i.isPlaying.toggle()
@@ -51,31 +58,34 @@ final class NowPlayingMonitor: ObservableObject {
         }
     }
 
-    private var process: Process?
-    private var buffer = Data()
-
-    init() { launch() }
-
-    func stop() { process?.terminationHandler = nil; process?.terminate() }
-
-    private func launch() {
+    private static func osascript(_ script: String, _ arg: String, stderr: Pipe? = nil) -> Process? {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        p.arguments = ["-l", "JavaScript", "-e", Self.script, String(ProcessInfo.processInfo.processIdentifier)]
-        let pipe = Pipe()
-        p.standardError = pipe      // JXA console.log writes to stderr
+        p.arguments = ["-l", "JavaScript", "-e", script, arg]
         p.standardOutput = FileHandle.nullDevice
+        p.standardError = stderr ?? FileHandle.nullDevice
+        do { try p.run(); return p } catch { NSLog("nxtch: osascript failed: \(error)"); return nil }
+    }
+
+    private func launch() {
+        let pipe = Pipe()   // JXA console.log writes to stderr
         pipe.fileHandleForReading.readabilityHandler = { [weak self] h in
             let data = h.availableData
             guard !data.isEmpty else { return }
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.consume(data) } }
         }
-        p.terminationHandler = { [weak self] _ in
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                MainActor.assumeIsolated { self?.launch() } // helper died → restart
+        let started = Date()
+        process = Self.osascript(Self.monitorScript, String(ProcessInfo.processInfo.processIdentifier), stderr: pipe)
+        process?.terminationHandler = { [weak self] _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    // Restart, backing off if it keeps dying right away.
+                    self.restartDelay = Date().timeIntervalSince(started) > 60 ? 2 : min(self.restartDelay * 2, 300)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + self.restartDelay) { MainActor.assumeIsolated { self.launch() } }
+                }
             }
         }
-        do { try p.run(); process = p } catch { NSLog("nxtch: now-playing helper failed: \(error)") }
     }
 
     private func consume(_ data: Data) {
@@ -83,13 +93,14 @@ final class NowPlayingMonitor: ObservableObject {
         while let nl = buffer.firstIndex(of: 0x0A) {
             let line = buffer[buffer.startIndex..<nl]
             buffer.removeSubrange(buffer.startIndex...nl)
-            guard let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { continue }
-            handle(obj)
+            if let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any] { handle(obj) }
         }
     }
 
     private func handle(_ o: [String: Any]) {
         guard let title = o["title"] as? String, !title.isEmpty else { info = nil; return }
+        // Any web page can set these through the Media Session API, so keep them in a sane range.
+        func seconds(_ key: String) -> Double? { (o[key] as? Double).flatMap { $0.isFinite && $0 >= 0 && $0 < 1e7 ? $0 : nil } }
         info = NowPlayingInfo(
             title: title,
             artist: (o["artist"] as? String).flatMap { $0.isEmpty ? nil : $0 },
@@ -97,13 +108,23 @@ final class NowPlayingMonitor: ObservableObject {
             bundleID: o["bundle"] as? String,
             parentBundleID: o["parent"] as? String,
             isPlaying: o["playing"] as? Bool ?? false,
-            elapsed: o["elapsed"] as? Double,
-            duration: (o["duration"] as? Double).flatMap { $0 > 0 ? $0 : nil },
-            timestamp: (o["timestamp"] as? Double).map { Date(timeIntervalSince1970: $0) },
-            rate: o["rate"] as? Double ?? 1)
+            elapsed: seconds("elapsed"),
+            duration: seconds("duration").flatMap { $0 > 0 ? $0 : nil },
+            timestamp: (o["timestamp"] as? Double).flatMap { $0.isFinite ? Date(timeIntervalSince1970: $0) : nil },
+            rate: (o["rate"] as? Double).map { $0.isFinite ? min(max($0, -8), 8) : 1 } ?? 1)
     }
 
-    private static let script = #"""
+    private static let commandScript = #"""
+    ObjC.import('Foundation');
+    function run(argv) {
+      $.NSBundle.bundleWithPath('/System/Library/PrivateFrameworks/MediaRemote.framework/').load;
+      ObjC.bindFunction('MRMediaRemoteSendCommand', ['bool', ['int', 'id']]);
+      $.MRMediaRemoteSendCommand(parseInt(argv[0]), $());
+      delay(0.4);  // the send is asynchronous: exiting immediately drops the command
+    }
+    """#
+
+    private static let monitorScript = #"""
     ObjC.import('Foundation');
     ObjC.import('AppKit');
     function run(argv) {
@@ -118,26 +139,22 @@ final class NowPlayingMonitor: ObservableObject {
         try {
           out.playing = !!R.localIsPlaying;
           const item = R.localNowPlayingItem;
-          if (!item.isNil()) {
-            const info = item.nowPlayingInfo;
-            if (!info.isNil()) {
-              out.title = str(info, 'kMRMediaRemoteNowPlayingInfoTitle');
-              out.artist = str(info, 'kMRMediaRemoteNowPlayingInfoArtist');
-              out.album = str(info, 'kMRMediaRemoteNowPlayingInfoAlbum');
-              out.elapsed = str(info, 'kMRMediaRemoteNowPlayingInfoElapsedTime');
-              out.duration = str(info, 'kMRMediaRemoteNowPlayingInfoDuration');
-              out.rate = str(info, 'kMRMediaRemoteNowPlayingInfoPlaybackRate');
-              const ts = info.objectForKey('kMRMediaRemoteNowPlayingInfoTimestamp');
-              if (!ts.isNil()) out.timestamp = ts.timeIntervalSince1970;
-            }
+          const info = item.isNil() ? null : item.nowPlayingInfo;
+          if (info && !info.isNil()) {
+            out.title = str(info, 'kMRMediaRemoteNowPlayingInfoTitle');
+            out.artist = str(info, 'kMRMediaRemoteNowPlayingInfoArtist');
+            out.album = str(info, 'kMRMediaRemoteNowPlayingInfoAlbum');
+            out.elapsed = str(info, 'kMRMediaRemoteNowPlayingInfoElapsedTime');
+            out.duration = str(info, 'kMRMediaRemoteNowPlayingInfoDuration');
+            out.rate = str(info, 'kMRMediaRemoteNowPlayingInfoPlaybackRate');
+            const ts = info.objectForKey('kMRMediaRemoteNowPlayingInfoTimestamp');
+            if (!ts.isNil()) out.timestamp = ts.timeIntervalSince1970;
           }
           const path = R.localNowPlayingPlayerPath;
-          if (!path.isNil()) {
-            const c = path.client;
-            if (!c.isNil()) {
-              out.bundle = ObjC.unwrap(c.bundleIdentifier);
-              out.parent = ObjC.unwrap(c.parentApplicationBundleIdentifier);
-            }
+          const c = path.isNil() ? null : path.client;
+          if (c && !c.isNil()) {
+            out.bundle = ObjC.unwrap(c.bundleIdentifier);
+            out.parent = ObjC.unwrap(c.parentApplicationBundleIdentifier);
           }
         } catch (e) { out.error = String(e); }
         const j = JSON.stringify(out);

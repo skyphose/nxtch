@@ -61,8 +61,8 @@ private struct DeleteZone: View {
         .scaleEffect(hot ? 1.05 : 1)
         .animation(.spring(response: 0.25, dampingFraction: 0.6), value: hot)
         .padding(.vertical, 8)
-        .onDrop(of: [.fileURL], isTargeted: Binding(get: { shelf.deleteTargeted }, set: { shelf.deleteTargeted = $0 })) { providers in
-            shelf.deleteDropped(providers)
+        .onDrop(of: [.fileURL], isTargeted: Binding(get: { shelf.deleteTargeted }, set: { shelf.deleteTargeted = $0 })) { _ in
+            shelf.deleteDragged()
         }
         .help("Drop here to delete from the shelf (original files are never trashed)")
     }
@@ -156,18 +156,16 @@ final class ShelfDragSourceView: NSView, NSDraggingSource {
     }
 
     override func menu(for event: NSEvent) -> NSMenu? {
-        let menu = NSMenu()
-        func add(_ title: String, _ action: @escaping () -> Void) {
-            let mi = ClosureMenuItem(title: title, action: action)
-            menu.addItem(mi)
-        }
         guard let shelf, let item else { return nil }
-        add("Open") { shelf.open(item) }
-        add("Show in Finder") { shelf.reveal(item) }
-        add("Copy") { shelf.copyToClipboard([item]) }
-        add("AirDrop…") { shelf.airDrop([item]) }
-        menu.addItem(.separator())
-        add("Delete") { shelf.remove(item) }
+        let menu = NSMenu()
+        let entries: [(String, () -> Void)] = [
+            ("Open", { shelf.open(item) }), ("Show in Finder", { shelf.reveal(item) }),
+            ("Copy", { shelf.copyToClipboard([item]) }), ("AirDrop…", { shelf.airDrop([item]) }), ("", {}),
+            ("Delete", { shelf.remove(item) }),
+        ]
+        for (title, action) in entries {
+            menu.addItem(title.isEmpty ? .separator() : ClosureMenuItem(title: title, action: action))
+        }
         return menu
     }
 }

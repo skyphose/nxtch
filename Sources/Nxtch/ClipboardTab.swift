@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// Clipboard tab: search field + history. Click copies; Return (or the context menu) pastes into
+/// Clipboard tab: search field and history. Click copies; Return (or the context menu) pastes into
 /// the app you were using.
 struct ClipboardTab: View {
     @ObservedObject var store: ClipboardStore
@@ -12,9 +12,7 @@ struct ClipboardTab: View {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(.secondary)
                 SearchField(store: store)
-                if !enabled {
-                    Text("Paused").font(.system(size: 10, weight: .semibold)).foregroundStyle(.orange)
-                }
+                if !enabled { Text("Paused").font(.system(size: 10, weight: .semibold)).foregroundStyle(.orange) }
             }
             .padding(.horizontal, 8)
             .frame(height: 26)
@@ -30,14 +28,11 @@ struct ClipboardTab: View {
                     ScrollView(.vertical, showsIndicators: false) {
                         VStack(spacing: 1) {
                             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                                ClipRow(item: item, store: store, selected: index == store.selection)
-                                    .id(item.id)
+                                ClipRow(item: item, store: store, selected: index == store.selection).id(item.id)
                             }
                         }
                     }
-                    .onChange(of: store.selection) { _, i in
-                        if i < items.count { proxy.scrollTo(items[i].id) }
-                    }
+                    .onChange(of: store.selection) { _, i in if i < items.count { proxy.scrollTo(items[i].id) } }
                 }
             }
         }
@@ -50,17 +45,17 @@ private struct ClipRow: View {
     @ObservedObject var store: ClipboardStore
     let selected: Bool
 
+    /// App icons by bundle ID. Looking them up on every redraw is a disk hit per row.
+    @MainActor private static var icons: [String: NSImage] = [:]
+
     var body: some View {
         HStack(spacing: 8) {
             leading.frame(width: 22, height: 22)
-            if item.kind == .image, let img = store.image(for: item) {
+            if item.kind == .image, let img = store.thumbnail(for: item) {
                 Image(nsImage: img).resizable().aspectRatio(contentMode: .fit)
-                    .frame(height: 24)
-                    .clipShape(RoundedRectangle(cornerRadius: 3))
-                Text("\(Int(img.size.width))×\(Int(img.size.height))")
-                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .frame(height: 24).clipShape(RoundedRectangle(cornerRadius: 3))
             } else {
-                Text(item.preview).font(.system(size: 12)).lineLimit(1).truncationMode(.tail)
+                Text(item.preview).font(.system(size: 12)).lineLimit(1)
             }
             Spacer(minLength: 4)
             if store.justCopied == item.id {
@@ -87,16 +82,26 @@ private struct ClipRow: View {
     }
 
     @ViewBuilder private var leading: some View {
-        if let id = item.sourceBundleID, let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: url.path)).resizable()
+        if let icon = Self.icon(item.sourceBundleID) {
+            Image(nsImage: icon).resizable()
         } else {
             Image(systemName: item.kind == .files ? "doc.on.doc" : item.kind == .image ? "photo" : "text.alignleft")
                 .font(.system(size: 12)).foregroundStyle(.secondary)
         }
     }
+
+    private static func icon(_ id: String?) -> NSImage? {
+        guard let id else { return nil }
+        if let cached = icons[id] { return cached }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) else { return nil }
+        let icon = NSWorkspace.shared.icon(forFile: url.path)
+        icon.size = NSSize(width: 22, height: 22)
+        icons[id] = icon
+        return icon
+    }
 }
 
-/// AppKit text field so we control focus and arrow/Return/Esc handling.
+/// An AppKit text field, so focus and arrow / Return / Esc handling are under our control.
 private struct SearchField: NSViewRepresentable {
     @ObservedObject var store: ClipboardStore
 
@@ -107,9 +112,8 @@ private struct SearchField: NSViewRepresentable {
         f.focusRingType = .none
         f.font = .systemFont(ofSize: 12)
         f.textColor = .white
-        f.placeholderAttributedString = NSAttributedString(
-            string: "Search clipboard  ·  ⌃⌥V", attributes: [.foregroundColor: NSColor.white.withAlphaComponent(0.35),
-                                                              .font: NSFont.systemFont(ofSize: 12)])
+        f.placeholderAttributedString = NSAttributedString(string: "Search clipboard  ·  ⌃⌥V", attributes: [
+            .foregroundColor: NSColor.white.withAlphaComponent(0.35), .font: NSFont.systemFont(ofSize: 12)])
         f.delegate = context.coordinator
         context.coordinator.field = f
         return f
@@ -130,40 +134,26 @@ private struct SearchField: NSViewRepresentable {
         init(store: ClipboardStore) {
             self.store = store
             super.init()
-            // When the panel becomes key (⌃⌥V), put the cursor in the search field.
+            // ⌃⌥V makes the panel key; put the cursor in the search field.
             observer = NotificationCenter.default.addObserver(forName: .nxtchFocusSearch, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    guard let f = self?.field else { return }
-                    f.window?.makeFirstResponder(f)
-                }
+                MainActor.assumeIsolated { if let f = self?.field { f.window?.makeFirstResponder(f) } }
             }
         }
 
-        func controlTextDidChange(_ note: Notification) {
-            store.query = field?.stringValue ?? ""
-        }
+        func controlTextDidChange(_ note: Notification) { store.query = field?.stringValue ?? "" }
 
         func control(_ control: NSControl, textView: NSTextView, doCommandBy sel: Selector) -> Bool {
             switch sel {
-            case #selector(NSResponder.moveDown(_:)): store.moveSelection(1); return true
-            case #selector(NSResponder.moveUp(_:)): store.moveSelection(-1); return true
+            case #selector(NSResponder.moveDown(_:)): store.moveSelection(1)
+            case #selector(NSResponder.moveUp(_:)): store.moveSelection(-1)
             case #selector(NSResponder.insertNewline(_:)):
                 let items = store.visible
                 if store.selection < items.count { store.paste(items[store.selection]) }
-                return true
             case #selector(NSResponder.cancelOperation(_:)):
-                if store.query.isEmpty {
-                    NotificationCenter.default.post(name: .nxtchRequestClose, object: nil)
-                } else {
-                    store.query = ""
-                }
-                return true
+                if store.query.isEmpty { NotificationCenter.default.post(name: .nxtchRequestClose, object: nil) } else { store.query = "" }
             default: return false
             }
+            return true
         }
     }
-}
-
-extension Notification.Name {
-    static let nxtchFocusSearch = Notification.Name("nxtchFocusSearch")
 }

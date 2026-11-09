@@ -54,13 +54,7 @@ enum NotchTab: String, CaseIterable {
         }
     }
 
-    var title: String {
-        switch self {
-        case .media: return "Media"
-        case .shelf: return "Shelf"
-        case .clipboard: return "Clipboard"
-        }
-    }
+    var title: String { rawValue.capitalized }
 }
 
 @MainActor
@@ -125,6 +119,7 @@ final class NotchController {
     private let nowPlaying: NowPlayingMonitor
     private let settings: AppSettings
     private let shelf: ShelfStore
+    private let clipboard: ClipboardStore
     private let vm: NotchViewModel
     private var monitors: [Any] = []
     private var closeWork: DispatchWorkItem?
@@ -152,6 +147,7 @@ final class NotchController {
         self.nowPlaying = nowPlaying
         self.settings = settings
         self.shelf = shelf
+        self.clipboard = clipboard
         let geo = NotchGeometry.current()?.1 ?? NotchGeometry(notchSize: CGSize(width: 200, height: 32), screenFrame: .zero)
         vm = NotchViewModel(geometry: geo)
         panel = NotchPanel(contentRect: .zero)
@@ -166,14 +162,10 @@ final class NotchController {
         settings.$showInFullScreen
             .sink { [weak self] show in self?.applySpaceBehavior(showInFullScreen: show) }
             .store(in: &bag)
-        // Meter taps follow what's on screen.
-        settings.$showEars.dropFirst()
-            .sink { [weak self] _ in DispatchQueue.main.async { MainActor.assumeIsolated { self?.updateMeterScope() } } }
+        // Meter taps follow what's on screen. (@Published fires before the value changes, hence .receive.)
+        settings.$showEars.combineLatest(vm.$tab).receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in MainActor.assumeIsolated { self?.updateMeterScope() } }
             .store(in: &bag)
-        vm.$tab.dropFirst()
-            .sink { [weak self] _ in DispatchQueue.main.async { MainActor.assumeIsolated { self?.updateMeterScope() } } }
-            .store(in: &bag)
-        updateMeterScope()
 
         let nc = NotificationCenter.default
         nc.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
@@ -190,22 +182,12 @@ final class NotchController {
             MainActor.assumeIsolated { self?.setOpen(false) }
         }
 
-        // System-wide we only watch clicks (to close on a click outside). Hover and drags are
-        // picked up by the 10×/s cursor check below; watching every mouse move system-wide
-        // woke nxtch 60–120×/s whenever the mouse moved anywhere.
-        let globalEvents: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .leftMouseUp]
-        let events: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged, .leftMouseUp, .leftMouseDown, .rightMouseDown]
-        if let g = NSEvent.addGlobalMonitorForEvents(matching: globalEvents, handler: { [weak self] e in
-            MainActor.assumeIsolated {
-                // A click anywhere outside nxtch closes it (global monitors only see other apps' events).
-                if e.type == .leftMouseDown || e.type == .rightMouseDown { self?.clickedOutside() }
-                self?.trackMouse()
-            }
+        // A click in another app closes nxtch. That's all nxtch watches system-wide: hover and
+        // drags come from the cursor check below, since watching every mouse move woke nxtch
+        // 60-120 times a second whenever the mouse moved anywhere.
+        if let g = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: { [weak self] _ in
+            MainActor.assumeIsolated { self?.clickedOutside() }
         }) { monitors.append(g) }
-        if let l = NSEvent.addLocalMonitorForEvents(matching: events, handler: { [weak self] e in
-            MainActor.assumeIsolated { self?.trackMouse() }
-            return e
-        }) { monitors.append(l) }
         // Esc closes when the panel has keyboard focus.
         if let k = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { [weak self] e in
             if e.keyCode == UInt16(kVK_Escape) {
@@ -215,8 +197,8 @@ final class NotchController {
             return e
         }) { monitors.append(k) }
 
-        // The main hover/drag detector: reading the cursor position is trivial, and unlike event
-        // monitors it also works while another app's menu is open or during drag sessions.
+        // Hover and drag detection: reading the cursor position is trivial, and unlike event
+        // monitors it also works while another app's menu is open or during a drag.
         pollTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.trackMouse() }
         }
@@ -304,16 +286,6 @@ final class NotchController {
             }
         } else {
             contentDragActive = false
-            // A drag out of the shelf has ended (dropped somewhere, or cancelled): hide the
-            // Delete zone. Delayed so a drop on the zone is handled first.
-            if buttonWasDown {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                    MainActor.assumeIsolated {
-                        guard let self, !self.mouseButtonDown else { return }
-                        self.shelf.endDrag()
-                    }
-                }
-            }
         }
         buttonWasDown = buttonDown
     }
@@ -390,13 +362,10 @@ final class NotchController {
     private func setOpen(_ open: Bool, reason: String = "") {
         closeWork?.cancel(); closeWork = nil
         guard open != vm.isOpen else { return }
-        if open {
-            Log.notch.info("opened reason=\(reason, privacy: .public) tab=\(self.vm.tab.rawValue, privacy: .public)")
-        } else {
-            Log.notch.info("closed hadKeyFocus=\(self.panel.isKeyWindow, privacy: .public)")
-        }
+        Log.notch.info("\(open ? "opened" : "closed", privacy: .public) reason=\(reason, privacy: .public) tab=\(self.vm.tab.rawValue, privacy: .public) key=\(self.panel.isKeyWindow, privacy: .public)")
         if open {
             shelf.prune()
+            clipboard.pasteTarget = NSWorkspace.shared.frontmostApplication?.processIdentifier
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
         } else {
             pinnedOpen = false

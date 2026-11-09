@@ -96,9 +96,7 @@ private struct ClosedContent: View {
     var body: some View {
         HStack(spacing: 0) {
             if showEars {
-                if let app = model.apps.first(where: \.isPlaying) {
-                    // The app that owns the now-playing media, else the first playing app.
-                    let owner = model.primaryApp ?? app
+                if let owner = model.primaryApp {
                     Image(nsImage: owner.icon).resizable().interpolation(.high)
                         .frame(width: 18, height: 18)
                         .frame(width: NotchViewModel.earWidth)

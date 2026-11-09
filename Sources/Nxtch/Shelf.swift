@@ -2,57 +2,75 @@ import AppKit
 import QuickLookThumbnailing
 import UniformTypeIdentifiers
 
-/// ~/Library/Application Support/nxtch/<name>
+/// ~/Library/Application Support/nxtch/<name>, readable by this user only.
 enum AppFiles {
     static func dir(_ name: String) -> URL {
         let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("nxtch/\(name)", isDirectory: true)
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path)   // also fixes existing folders
         return url
     }
 
-    /// A file URL in `dir` that doesn't exist yet, based on `name`.
-    static func unique(_ name: String, in dir: URL) -> URL {
-        let base = (name as NSString).deletingPathExtension
-        let ext = (name as NSString).pathExtension
-        var url = dir.appendingPathComponent(name)
+    /// A file name that can't leave its folder or disguise itself: no path separators or "..",
+    /// no control or bidi-override characters, not hidden, not absurdly long.
+    static func safeName(_ raw: String, fallback: String = "item") -> String {
+        let cleaned = String(String.UnicodeScalarView(raw.unicodeScalars.filter {
+            !CharacterSet.controlCharacters.contains($0) && $0.properties.generalCategory != .format
+        }))
+        .replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
+        .trimmingCharacters(in: CharacterSet(charactersIn: ". ").union(.whitespacesAndNewlines))
+        let ext = (cleaned as NSString).pathExtension
+        let name = cleaned.count <= 120 || ext.isEmpty || ext.count > 10
+            ? String(cleaned.prefix(120))
+            : String((cleaned as NSString).deletingPathExtension.prefix(110)) + "." + ext
+        return name.isEmpty ? fallback : name
+    }
+
+    /// A URL in `dir` for `name` (sanitized) that doesn't exist yet.
+    static func unique(_ name: String, in dir: URL) -> URL? {
+        let safe = safeName(name)
+        let base = (safe as NSString).deletingPathExtension, ext = (safe as NSString).pathExtension
+        var url = dir.appendingPathComponent(safe)
         var n = 2
         while FileManager.default.fileExists(atPath: url.path) {
             url = dir.appendingPathComponent(ext.isEmpty ? "\(base) \(n)" : "\(base) \(n).\(ext)")
             n += 1
         }
-        return url
+        return contains(dir, url) ? url : nil
+    }
+
+    static func contains(_ dir: URL, _ url: URL) -> Bool {
+        url.standardizedFileURL.deletingLastPathComponent().path == dir.standardizedFileURL.path
     }
 }
 
 struct ShelfItem: Identifiable, Codable, Equatable {
     let id: UUID
     let path: String
-    /// True when the file lives in nxtch's own storage (dropped text, images, links, file promises)
-    /// and should be deleted when removed from the shelf. Dropped files are only referenced.
+    /// The file lives in nxtch's own storage (dropped text, images, links, file promises) and is
+    /// deleted with the item. Dropped files are only referenced.
     let owned: Bool
-    let added: Date
 
     var url: URL { URL(fileURLWithPath: path) }
     var name: String { url.lastPathComponent }
 }
 
-/// The shelf: a temporary holding area for files dragged onto the notch.
+/// A temporary holding area for anything dragged onto the notch.
 @MainActor
 final class ShelfStore: ObservableObject {
     @Published private(set) var items: [ShelfItem] = []
     @Published private(set) var thumbnails: [UUID: NSImage] = [:]
-    /// The shelf item currently being dragged out (shows the Delete drop zone).
+    /// The item being dragged out of the shelf (shows the Delete zone).
     @Published private(set) var draggingItemID: UUID?
     @Published var deleteTargeted = false
-    /// Set when a shelf drag was dropped back onto nxtch itself (shelf or Delete zone).
+    /// The current drag out ended on nxtch itself (shelf or Delete zone), not somewhere else.
     private var droppedInternally = false
 
-    private let defaultsKey = "shelfItems"
     private let storage = AppFiles.dir("Shelf")
 
     init() {
-        if let data = UserDefaults.standard.data(forKey: defaultsKey),
+        if let data = UserDefaults.standard.data(forKey: "shelfItems"),
            let saved = try? JSONDecoder().decode([ShelfItem].self, from: data) {
             items = saved
         }
@@ -61,14 +79,11 @@ final class ShelfStore: ObservableObject {
     }
 
     var isEmpty: Bool { items.isEmpty }
-    var urls: [URL] { items.map(\.url) }
-
-    // MARK: Editing
 
     func add(_ url: URL, owned: Bool = false) {
         guard FileManager.default.fileExists(atPath: url.path) else { return }
         items.removeAll { $0.path == url.path }
-        let item = ShelfItem(id: UUID(), path: url.path, owned: owned, added: Date())
+        let item = ShelfItem(id: UUID(), path: url.path, owned: owned)
         items.append(item)
         Log.shelf.info("added owned=\(owned, privacy: .public) count=\(self.items.count, privacy: .public)")
         makeThumbnail(item)
@@ -78,170 +93,118 @@ final class ShelfStore: ObservableObject {
     func remove(_ item: ShelfItem) {
         items.removeAll { $0.id == item.id }
         thumbnails[item.id] = nil
-        if item.owned { try? FileManager.default.removeItem(at: item.url) }
+        // Only ever delete nxtch's own copies, even if the saved list was tampered with.
+        if item.owned, AppFiles.contains(storage, item.url) { try? FileManager.default.removeItem(at: item.url) }
         save()
     }
 
     func clear() { items.forEach(remove) }
 
-    // MARK: Dragging out
-
-    func beginDrag(_ item: ShelfItem) {
-        draggingItemID = item.id
-        Log.shelf.info("drag out started")
-    }
-
-    /// Called by the drag source when a drag out of the shelf ends. Shelf items are temporary:
-    /// a successful drop anywhere else takes the item off the shelf (and deletes nxtch's own copy).
-    func finishDrag(_ item: ShelfItem, operation: NSDragOperation) {
-        defer { endDrag() }
-        if droppedInternally { droppedInternally = false; return }
-        guard !operation.isEmpty else {
-            Log.shelf.info("drag out cancelled; item kept")
-            return
-        }
-        guard items.contains(where: { $0.id == item.id }) else { return }
-        Log.shelf.info("dragged out op=\(operation.rawValue, privacy: .public) owned=\(item.owned, privacy: .public); removed from shelf")
-        remove(item)
-    }
-
-    func endDrag() {
-        guard draggingItemID != nil else { return }
-        draggingItemID = nil
-        deleteTargeted = false
-    }
-
-    /// Drop on the Delete zone: removes the matching shelf item(s). Matches by file path so it
-    /// doesn't depend on drag state that may already have been cleared.
-    func deleteDropped(_ providers: [NSItemProvider]) -> Bool {
-        droppedInternally = true
-        let fallback = draggingItemID
-        var handled = false
-        for p in providers where p.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
-            handled = true
-            _ = p.loadObject(ofClass: URL.self) { url, _ in
-                DispatchQueue.main.async {
-                    MainActor.assumeIsolated {
-                        let match = url.flatMap { u in self.items.first { $0.path == u.path } }
-                            ?? self.items.first { $0.id == fallback }
-                        if let match {
-                            Log.shelf.info("deleted via drop zone owned=\(match.owned, privacy: .public)")
-                            self.remove(match)
-                        }
-                        self.endDrag()
-                    }
-                }
-            }
-        }
-        return handled
-    }
-
-    /// Drop items whose files were moved or deleted elsewhere.
+    /// Drops items whose files were moved or deleted elsewhere.
     func prune() {
         let before = items.count
         items.removeAll { !FileManager.default.fileExists(atPath: $0.path) }
         if items.count != before { save() }
     }
 
-    // MARK: Actions
-
     func open(_ item: ShelfItem) { NSWorkspace.shared.open(item.url) }
     func reveal(_ item: ShelfItem) { NSWorkspace.shared.activateFileViewerSelecting([item.url]) }
 
-    /// Puts the files on the clipboard; paste in Finder to copy them (⌥⌘V to move).
+    /// Puts the files on the clipboard: paste in Finder to copy them, ⌥⌘V to move them.
     func copyToClipboard(_ items: [ShelfItem]? = nil) {
-        let pb = NSPasteboard.general
-        pb.clearContents()
-        pb.writeObjects((items ?? self.items).map { $0.url as NSURL })
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.writeObjects((items ?? self.items).map { $0.url as NSURL })
     }
 
     func airDrop(_ items: [ShelfItem]? = nil) {
         NSSharingService(named: .sendViaAirDrop)?.perform(withItems: (items ?? self.items).map(\.url))
     }
 
+    // MARK: Dragging out
+
+    func beginDrag(_ item: ShelfItem) { draggingItemID = item.id }
+
+    /// Shelf items are temporary: a successful drop anywhere else takes the item off the shelf.
+    func finishDrag(_ item: ShelfItem, operation: NSDragOperation) {
+        defer { draggingItemID = nil; deleteTargeted = false; droppedInternally = false }
+        guard !droppedInternally, !operation.isEmpty, items.contains(where: { $0.id == item.id }) else { return }
+        Log.shelf.info("dragged out op=\(operation.rawValue, privacy: .public); removed from shelf")
+        remove(item)
+    }
+
+    /// A drop on the Delete zone. The only thing that can be dragged there is a shelf item.
+    func deleteDragged() -> Bool {
+        droppedInternally = true
+        guard let item = items.first(where: { $0.id == draggingItemID }) else { return false }
+        Log.shelf.info("deleted via drop zone")
+        remove(item)
+        return true
+    }
+
     // MARK: Dropping in
 
-    /// Accepts anything dragged onto the notch: files (referenced), images, links, text and
-    /// file promises (copied into nxtch's storage).
+    /// Accepts anything dragged onto the notch: files are referenced; images, links, text and
+    /// file promises are saved into nxtch's storage.
     func handleDrop(_ providers: [NSItemProvider]) -> Bool {
-        let types = providers.map { $0.registeredTypeIdentifiers.joined(separator: ",") }.joined(separator: " | ")
-        Log.shelf.info("drop providers=\(providers.count, privacy: .public) types=\(types, privacy: .public)")
-        // A shelf item dropped back onto the notch: nothing to add, and don't take it off the shelf.
-        if draggingItemID != nil {
-            droppedInternally = true
-            return false
-        }
+        // A shelf item dropped back onto the notch: nothing to add, and it stays on the shelf.
+        if draggingItemID != nil { droppedInternally = true; return false }
+        Log.shelf.info("drop providers=\(providers.count, privacy: .public)")
         providers.forEach(ingest)
         return !providers.isEmpty
     }
 
     private nonisolated func ingest(_ p: NSItemProvider) {
         let storage = AppFiles.dir("Shelf")
-        let addOwned: @Sendable (URL) -> Void = { url in
-            DispatchQueue.main.async { MainActor.assumeIsolated { self.add(url, owned: true) } }
+        let add: @Sendable (URL, Bool) -> Void = { url, owned in
+            DispatchQueue.main.async { MainActor.assumeIsolated { self.add(url, owned: owned) } }
         }
+        let has = { (t: UTType) in p.hasItemConformingToTypeIdentifier(t.identifier) }
+        let firstType = { (t: UTType) in p.registeredTypeIdentifiers.first { UTType($0)?.conforms(to: t) == true } }
 
-        if p.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
-            _ = p.loadObject(ofClass: URL.self) { url, _ in
-                guard let url, url.isFileURL else { return }
-                DispatchQueue.main.async { MainActor.assumeIsolated { self.add(url) } }
+        if has(.fileURL) {
+            _ = p.loadObject(ofClass: URL.self) { url, _ in if let url, url.isFileURL { add(url, false) } }
+        } else if let type = firstType(.image) ?? (has(.url) || has(.plainText) ? nil : firstType(.data)) {
+            // Real data and file promises alike: the provider hands over a temporary file to copy.
+            let suggested = p.suggestedName
+            _ = p.loadFileRepresentation(forTypeIdentifier: type) { tmp, _ in
+                guard let tmp else { return }
+                var name = suggested ?? tmp.lastPathComponent
+                if (name as NSString).pathExtension.isEmpty, let ext = UTType(type)?.preferredFilenameExtension { name += ".\(ext)" }
+                if let dest = AppFiles.unique(name, in: storage), (try? FileManager.default.copyItem(at: tmp, to: dest)) != nil {
+                    add(dest, true)
+                }
             }
-        } else if let type = p.registeredTypeIdentifiers.first(where: { UTType($0)?.conforms(to: .image) == true }) {
-            copyRepresentation(p, type: type, into: storage, done: addOwned)
-        } else if p.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
+        } else if has(.url) {
             _ = p.loadObject(ofClass: URL.self) { url, _ in
-                guard let url else { return }
-                let name = (url.host ?? "Link") + ".webloc"
-                let dest = AppFiles.unique(name, in: storage)
-                let plist = try? PropertyListSerialization.data(fromPropertyList: ["URL": url.absoluteString], format: .xml, options: 0)
-                if (try? plist?.write(to: dest)) != nil { addOwned(dest) }
+                guard let url, let dest = AppFiles.unique((url.host() ?? "link") + ".webloc", in: storage),
+                      let data = try? PropertyListSerialization.data(fromPropertyList: ["URL": url.absoluteString], format: .xml, options: 0),
+                      (try? data.write(to: dest, options: .withoutOverwriting)) != nil else { return }
+                add(dest, true)
             }
-        } else if p.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
+        } else if has(.plainText) {
             _ = p.loadObject(ofClass: String.self) { text, _ in
                 guard let text, !text.isEmpty else { return }
-                let title = text.split(whereSeparator: \.isNewline).first.map(String.init) ?? "Text"
-                let name = String(title.prefix(40)).replacingOccurrences(of: "/", with: "-") + ".txt"
-                let dest = AppFiles.unique(name, in: storage)
-                if (try? text.write(to: dest, atomically: true, encoding: .utf8)) != nil { addOwned(dest) }
+                let title = text.split(whereSeparator: \.isNewline).first.map { String($0.prefix(40)) } ?? "text"
+                guard let dest = AppFiles.unique(AppFiles.safeName(title, fallback: "text") + ".txt", in: storage),
+                      (try? Data(text.utf8).write(to: dest, options: .withoutOverwriting)) != nil else { return }
+                add(dest, true)
             }
-        } else if let type = p.registeredTypeIdentifiers.first(where: { UTType($0)?.conforms(to: .data) == true }) {
-            copyRepresentation(p, type: type, into: storage, done: addOwned)
-        }
-    }
-
-    /// Handles real data and file promises alike: the provider hands us a temporary file to copy.
-    private nonisolated func copyRepresentation(_ p: NSItemProvider, type: String, into storage: URL,
-                                                done: @escaping @Sendable (URL) -> Void) {
-        let suggested = p.suggestedName
-        _ = p.loadFileRepresentation(forTypeIdentifier: type) { tmp, _ in
-            guard let tmp else { return }
-            var name = suggested ?? tmp.lastPathComponent
-            if (name as NSString).pathExtension.isEmpty, let ext = UTType(type)?.preferredFilenameExtension {
-                name += ".\(ext)"
-            }
-            let dest = AppFiles.unique(name, in: storage)
-            if (try? FileManager.default.copyItem(at: tmp, to: dest)) != nil { done(dest) }
         }
     }
 
     // MARK: Internals
 
     private func save() {
-        if let data = try? JSONEncoder().encode(items) { UserDefaults.standard.set(data, forKey: defaultsKey) }
+        if let data = try? JSONEncoder().encode(items) { UserDefaults.standard.set(data, forKey: "shelfItems") }
     }
 
     private func makeThumbnail(_ item: ShelfItem) {
         thumbnails[item.id] = NSWorkspace.shared.icon(forFile: item.path)
-        let request = QLThumbnailGenerator.Request(fileAt: item.url, size: CGSize(width: 96, height: 96),
-                                                   scale: 2, representationTypes: .thumbnail)
+        let request = QLThumbnailGenerator.Request(fileAt: item.url, size: CGSize(width: 96, height: 96), scale: 2, representationTypes: .thumbnail)
         let id = item.id
         QLThumbnailGenerator.shared.generateBestRepresentation(for: request) { rep, _ in
             guard let image = rep?.nsImage else { return }
-            DispatchQueue.main.async {
-                MainActor.assumeIsolated {
-                    if self.thumbnails[id] != nil { self.thumbnails[id] = image }
-                }
-            }
+            DispatchQueue.main.async { MainActor.assumeIsolated { if self.thumbnails[id] != nil { self.thumbnails[id] = image } } }
         }
     }
 }
