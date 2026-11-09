@@ -1,33 +1,54 @@
 # nxtch
 
-*Like "no notch."* nxtch turns the MacBook notch into a small, fast home for three things:
+the macbook notch is a black bar that does nothing. nxtch makes it do three things: per-app volume and whats playing, a shelf for files, and clipboard history.
 
-- **Media.** See what's playing (title, artist, progress, and the app it's in) with previous / play-pause / next, plus per-app volume (0–150%), mute and live level meters.
-- **Shelf.** Drag anything onto the notch to park it: files, images, links, text. Drag it back out wherever it needs to go, copy it all, or AirDrop it.
-- **Clipboard.** Searchable history of text, images and files with pinning. Press **⌃⌥V** anywhere, type to search, and press Return to paste.
+the name is "no notch" with the o knocked out.
 
-It's meant to stay lightweight. See [SCOPE.md](SCOPE.md) for what's in, what's deliberately out, and the resource budget.
+## before you install
 
-## Using it
+- macos 14.2 or later. process taps arrived in 14.2. ive only run it on macos 27.2, on one m-series macbook pro. 14.2 is the floor on paper, not something i tested.
+- a mac with a notch. on other displays it falls back to a small pill at the top center. untested, i dont have one.
+- the xcode command line tools. full xcode isnt needed.
+
+## who its not for
+
+- you want album art. theres none, on purpose. getting it means loading unsigned code into a system program or downloading it from each service. you get the app icon instead.
+- you live on an external display. nxtch sits on the notch screen only.
+- you need rich text out of your clipboard history. it keeps plain text, images and file references.
+- you dont want an app that leans on private api. now playing uses apple's `MediaRemote` framework through `osascript`, and a future macos can break it.
+
+## using it
 
 | | |
 | --- | --- |
-| Open | Rest the pointer on the notch, drag something onto it, or press ⌃⌥V |
-| Close | Move away, press Esc, or click elsewhere |
-| Tabs | Icons to the left of the notch: Media · Shelf · Clipboard |
-| Settings | Gear to the right of the notch: launch at login, activity beside notch, full screen, clipboard recording, quit |
+| open | rest the pointer on the notch, drag something onto it, or press ⌃⌥V |
+| close | move away, press esc, or click somewhere else |
+| tabs | icons left of the notch: media, shelf, clipboard |
+| settings | gear right of the notch: launch at login, activity beside notch, full screen, clipboard recording, quit |
 
-**Shelf:** Items are temporary. Once you drag one out and drop it somewhere, it leaves the shelf. Dropped files are only referenced, so nothing is copied. Text, links, images and file promises (from Mail, Photos, screenshots and so on) are saved in `~/Library/Application Support/nxtch/Shelf`. Your files copy out by default; hold ⌘ while dropping to move them. Text, links and images that nxtch saved move out, so no copy is left behind. While you drag an item, a **Delete** square appears; drop it there to take it off the shelf (your original files are never trashed). Double-click an item to open it; right-click for Open, Show in Finder, Copy, AirDrop or Delete.
+### media
 
-**Clipboard:** Click a row to copy it. Return pastes the selected row into the app you were using (↑/↓ to move the selection). Right-click to paste, pin or delete. Anything that password managers mark as concealed or transient is never recorded. History lives in `~/Library/Application Support/nxtch/Clipboard`.
+whats playing (title, artist, progress, the app its in) with previous, play/pause and next. below that, one row per app making sound: volume 0 - 150%, mute, and a live level meter.
 
-## Requirements
+### shelf
 
-- macOS 14.2 or later (process taps arrived in 14.2)
-- A Mac with a notch (on other displays it falls back to a small pill at the top center)
-- Swift toolchain: the Xcode Command Line Tools are enough
+drag anything onto the notch to park it: files, images, links, text. items are temporary. drag one out and drop it somewhere, and it leaves the shelf.
 
-## Build
+- your files are only referenced, nothing is copied. they copy out by default. hold ⌘ while dropping to move them.
+- text, links, images and file promises (mail, photos, screenshots) get saved in `~/Library/Application Support/nxtch/Shelf`. those move out, so no copy is left behind.
+- while you drag an item, a delete square shows up. drop it there to take it off the shelf. your original files are never trashed.
+- double-click opens an item. right-click for open, show in finder, copy, airdrop or delete.
+
+### clipboard
+
+press ⌃⌥V anywhere and type to search. ↑/↓ moves the selection, return pastes into the app you were in.
+
+- click a row to copy it. right-click to paste, pin or delete.
+- anything a password manager marks as concealed or transient is never recroded. nothing is recorded while a password manager is the frontmost app either, since not all of them mark their items.
+- text is capped at 50,000 characters. images over 20 MB or 50 megapixels are skipped.
+- history lives in `~/Library/Application Support/nxtch/Clipboard`, readable by your user only and kept out of time machine.
+
+## build
 
 ```bash
 ./build.sh            # builds Nxtch.app in this folder
@@ -35,47 +56,57 @@ It's meant to stay lightweight. See [SCOPE.md](SCOPE.md) for what's in, what's d
 ./build.sh --install  # builds, copies to /Applications and launches from there
 ```
 
-`build.sh` calls `swiftc` directly rather than `swift build`, because SwiftPM is broken in some Command Line Tools installs. `Package.swift` is there for editors. The code avoids SwiftUI's `@State` (on recent SDKs it's a macro that needs a compiler plugin the Command Line Tools don't include).
+`build.sh` calls `swiftc` directly, not `swift build`. swiftpm is broken in some command line tools installs. `Package.swift` is there for editors. the code also avoids swiftui's `@State`: on recent sdks its a macro that needs a compiler plugin the command line tools dont ship.
 
-## Permissions
+## permissions
 
-| Permission | Asked when | Why |
+| permission | asked when | why |
 | --- | --- | --- |
-| System Audio Recording | The first time an app plays sound | Per-app volume and level meters read each app's audio |
-| Accessibility | The first time you paste from clipboard history | Return/Paste sends ⌘V to the app you were in |
+| system audio recording | the first time an app plays sound | per-app volume and the meters read each app's audio |
+| accessibility | the first time you paste from clipboard history | return/paste sends ⌘V to the app you were in |
 
-The app is signed ad hoc, so macOS may ask again after each rebuild.
+the app is signed ad hoc, so macos may ask again after every rebuild. return only pastes if the app you were in is frontmost again. otherwise the item just stays on the clipboard.
 
-## How it works
+## how it works
 
-- **Per-app volume:** Core Audio process taps. For an app set to anything other than 100%, nxtch taps its audio, mutes the original and plays it back through the default output with the chosen gain, ramped smoothly and run through a soft limiter. At 100%, the app's audio isn't touched at all.
-- **Meters:** the tap callback splits each app's audio into four bands with one-pole filters. Meters are drawn with CALayers and only run where visible.
-- **Now playing:** since macOS 15.4, the private MediaRemote framework only answers Apple-signed programs, so nxtch asks through `osascript` (JXA), which is Apple-signed. A long-running helper reports title, artist and position (it quits when nxtch quits), and playback buttons send commands the same way, so they need no permission. There's deliberately no album art: getting it would mean loading unsigned code into a system program or downloading from each service. This relies on private API and may break in a future macOS.
-- **Notch panel:** a borderless, non-activating `NSPanel` above the menu bar. To stay out of the way:
-  - It opens only after you rest on the hardware notch, or when you drag something onto it.
-  - Only the visible black shape takes clicks; everything around it passes through.
-  - It takes keyboard focus only for clipboard search, and hands focus back when it closes.
-  - It's hidden in full-screen apps unless you turn that on.
+**per-app volume.** core audio process taps. for an app set to anything but 100%, nxtch taps its audio and mutes the original. then it plays it back through the default output at your gain, ramped and run through a soft limiter. at 100% the app's audio isnt touched.
 
-## Project layout
+**meters.** the tap callback splits each app's audio into four bands with one-pole filters. meters are drawn with `CALayer`s and only run where you can see them.
+
+**now playing.** since macos 15.4, `MediaRemote` only answers apple-signed programs. so nxtch asks through `osascript` (jxa), which is apple-signed. a long-running helper reports title, artist and position, and quits when nxtch quits. the playback buttons send comamnds the same way, so they need no permission.
+
+**the notch panel.** a borderless, non-activating `NSPanel` above the menu bar. it tries hard to stay out of the way:
+
+- it only opens after you rest on the hardware notch, or when you drag something onto it.
+- only the visible black shape takes clicks. everything around it passes through.
+- it takes keyboard focus only for clipboard search, and hands it back when it closes.
+- its hidden in full-screen apps unless you turn that on.
+
+## security
+
+- signed with hardened runtime, so another process cant inject code into nxtch and borrow its audio or accessibility access.
+- names of dropped files are cleaned before saving. a name cant leave the shelf folder, hide itself or fake its extension with right-to-left characters.
+- files nxtch saves get the quarantine flag, so gatekeeper still checks them when you open one.
+- nxtch only ever deletes files inside its own shelf folder.
+- now-playing data comes from any app or web page, so its times are clamped before use.
+
+what it costs to run, and what stays out on purpose, is in [SCOPE.md](SCOPE.md).
+
+## project layout
 
 ```
 Sources/Nxtch/
-  main.swift              app entry, wiring
-  NotchWindow.swift       panel, tabs model, mouse/drag/keyboard handling
-  NotchView.swift         notch shape, open/closed shells, tab bar, CALayer level meter
-  MediaTab.swift          now-playing card, mixer rows
-  ShelfTab.swift          shelf tiles
-  ClipboardTab.swift      search field, history rows
-  MixerModel.swift        finds which apps make sound, keeps taps in sync, saves volumes
-  AppVolumeTap.swift      process tap + aggregate device + real-time render callback
-  CoreAudioHelpers.swift  Core Audio property helpers
-  NowPlaying.swift        now-playing monitor (osascript helper)
-  Shelf.swift             shelf store: drops, thumbnails, persistence
-  Clipboard.swift         clipboard history store
-  MediaControls.swift     media keys, ⌘V keystroke, launch at login
-  Hotkey.swift            global shortcut (⌃⌥V)
-  Settings.swift          user settings
+  main.swift          app entry, settings, logging, global shortcut, ⌘V
+  NotchWindow.swift   panel, tabs model, mouse/drag/keyboard handling
+  NotchView.swift     notch shape, open/closed shells, tab bar, CALayer level meter
+  MediaTab.swift      now-playing card, mixer rows
+  ShelfTab.swift      shelf tiles, delete zone, drag source
+  ClipboardTab.swift  search field, history rows
+  MixerModel.swift    finds which apps make sound, keeps taps in sync, saves volumes
+  Audio.swift         core audio helpers, process tap, real-time render callback
+  NowPlaying.swift    now-playing helper and playback commands (osascript)
+  Shelf.swift         shelf store: safe file names, drops, thumbnails
+  Clipboard.swift     clipboard history store
 Resources/Info.plist
 build.sh
 SCOPE.md
