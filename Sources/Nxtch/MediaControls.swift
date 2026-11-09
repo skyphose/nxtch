@@ -25,6 +25,7 @@ enum MediaKey: Int32 {
       $.NSBundle.bundleWithPath('/System/Library/PrivateFrameworks/MediaRemote.framework/').load;
       ObjC.bindFunction('MRMediaRemoteSendCommand', ['bool', ['int', 'id']]);
       $.MRMediaRemoteSendCommand(parseInt(argv[0]), $());
+      delay(0.4);  // the send is asynchronous: exiting immediately drops the command
     }
     """#
 }

@@ -41,6 +41,7 @@ final class NowPlayingMonitor: ObservableObject {
     @Published private(set) var info: NowPlayingInfo?
     /// Sends a media command and updates the play state right away (the helper confirms within ~1 s).
     func send(_ key: MediaKey) {
+        Log.notch.info("media command \(key.rawValue, privacy: .public)")
         key.send()
         if key == .playPause, var i = info {
             if i.isPlaying, let pos = i.position() { i.elapsed = pos }   // freeze progress where it is
