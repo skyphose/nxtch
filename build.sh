@@ -20,7 +20,7 @@ is_nxtch() {
 }
 
 if [[ " $* " == *" --uninstall "* ]]; then
-  INSTALLED="${NXTCH_APP:-/Applications/$APP}"   # homebrew keeps the app somewhere else
+  INSTALLED="/Applications/$APP"
   if [[ -e "$INSTALLED" || -L "$INSTALLED" ]] && ! is_nxtch "$INSTALLED"; then
     echo "$INSTALLED doesnt look like nxtch. Not touching it." >&2; exit 1
   fi
@@ -33,7 +33,7 @@ if [[ " $* " == *" --uninstall "* ]]; then
   pkill -x Nxtch 2>/dev/null || true
   for _ in {1..50}; do pgrep -x Nxtch >/dev/null || break; sleep 0.1; done
   "$LSREGISTER" -u "$INSTALLED" "$PWD/$APP" >/dev/null 2>&1 || true
-  [[ -n "${NXTCH_KEEP_APP:-}" ]] || rm -rf "$INSTALLED" "$APP"   # homebrew removes its own copy
+  rm -rf "$INSTALLED" "$APP"
   rm -rf "$HOME/Library/Application Support/nxtch"
   # Settings, and everything macOS keeps per app. dev.notchmixer.app is the id nxtch had under its first name.
   for ID in "$BUNDLE_ID" dev.notchmixer.app; do

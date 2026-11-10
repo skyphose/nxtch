@@ -1,0 +1,51 @@
+# Builds nxtch from a pushed version tag and attaches the zipped app to a GitHub release.
+# The build runs here, from the tagged source, not on anyone's laptop.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write       # create the release
+  id-token: write       # sign the provenance attestation
+  attestations: write
+
+jobs:
+  release:
+    runs-on: macos-26   # apple silicon, like every mac with a notch
+    steps:
+      # Actions are pinned to exact commits, so a moved tag upstream can't change what runs here.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: build
+        run: |
+          xcrun swiftc --version
+          SIGN_ID=- ./build.sh
+          codesign --verify --strict Nxtch.app
+
+      - name: check the app's version matches the tag
+        if: ${{ !contains(github.ref_name, '-') }}
+        run: test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' Nxtch.app/Contents/Info.plist)" = "${GITHUB_REF_NAME#v}"
+
+      - name: zip
+        run: ditto -c -k --keepParent Nxtch.app "nxtch-$GITHUB_REF_NAME.zip"
+
+      # Proves the zip was built here from this tag: gh attestation verify <zip> --repo skyphose/nxtch
+      # GitHub only offers this on public repos.
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        if: ${{ !github.event.repository.private }}
+        with:
+          subject-path: nxtch-${{ github.ref_name }}.zip
+
+      - name: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Notes are this version's section of CHANGELOG.md. A tag with a dash is a pre-release.
+          awk -v v="${GITHUB_REF_NAME#v}" '$0 ~ "^## " v " " {on=1; next} /^## / {on=0} on' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "test build of $GITHUB_REF_NAME" > notes.md
+          pre=""; case "$GITHUB_REF_NAME" in *-*) pre="--prerelease";; esac
+          gh release create "$GITHUB_REF_NAME" "nxtch-$GITHUB_REF_NAME.zip" --title "$GITHUB_REF_NAME" --notes-file notes.md $pre

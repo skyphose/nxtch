@@ -19,7 +19,6 @@ all four live in one app: a 1.3 MB binary, one process, apple frameworks only, n
 
 - macos 14.2 or later. process taps arrived in 14.2. ive only run it on macos 27.2, on one m-series macbook pro. 14.2 is the floor on paper, not something i tested.
 - a mac with a notch. on other displays it falls back to a small pill at the top center. untested, i dont have one.
-- apple's command line tools, about 2 GB. homebrew already needs them, and `xcode-select --install` gets them without it. full xcode isnt needed.
 
 ## who its not for
 
@@ -29,39 +28,59 @@ all four live in one app: a 1.3 MB binary, one process, apple frameworks only, n
 - you need rich text out of your clipboard history. it keeps plain text, images and file reefrences.
 - you copy passwords out of a browser extension or a terminal. those look like any other text, so they sit in the clipboard history for up to 7 days unless you delete them.
 - you dont want an app that leans on private api. now playing uses apple's `MediaRemote` framework through `osascript`, and a future macos can break it.
+- you wont click past apple's warning. i dont pay for apple's developer program, so the download isnt notarized and macos makes you allow it once. building it yourself skips that.
 
 ## install
 
-with homebrew:
+download the zip from the [latest release](https://github.com/skyphose/nxtch/releases/latest), then:
+
+1. unzip it (safari does that by itself) and drag `Nxtch.app` into Applications.
+2. open it. macos says it cant verify nxtch, since apple hasnt notarized it. click done.
+3. in system settings > privacy & security, scroll down and click "open anyway" next to nxtch, then confirm. once per download.
+
+github builds that zip from the tagged source, not my laptop. the steps are in `.github/workflows/release.yml`. to check a zip came from there, with the [github cli](https://cli.github.com):
 
 ```bash
-brew tap skyphose/nxtch https://github.com/skyphose/nxtch && brew install nxtch && nxtch
+gh attestation verify nxtch-v0.6.0.zip --repo skyphose/nxtch
 ```
 
-or by hand:
+### build it yourself
+
+needs apple's command line tools, about 2 GB: `xcode-select --install`. full xcode isnt needed. no warning to click past, since your mac built it.
 
 ```bash
 git clone https://github.com/skyphose/nxtch.git ~/nxtch && ~/nxtch/build.sh --install
 ```
 
-either way nxtch is built from source on your mac, in under a minute. theres no download to trust, and since you built it yourself, gatekeeper has nothing to quarantine. by hand copies it to /Applications and starts it. homebrew keeps it in its own folder, and `nxtch` starts it.
+that builds it in under a minute, copies it to /Applications and starts it. the command line tools build i ran by pointing the build at them on a mac that also has xcode, not on a mac without it.
 
-ive only run either install on my own mac. the homebrew one i tested from a local copy of this repo, not from github. the command line tools build i ran by pointing the build at them on a mac that also has xcode, not on a mac without it.
-
-| | by hand | homebrew |
+| | downloaded | built yourself |
 | --- | --- | --- |
-| update | `cd ~/nxtch && git pull && ./build.sh --install` | `brew upgrade nxtch` |
-| uninstall | `~/nxtch/build.sh --uninstall`, then delete `~/nxtch` | `nxtch --uninstall && brew uninstall nxtch` |
-| run without installing | `./build.sh --run` | |
-| an older version | `git checkout v0.4.0 && ./build.sh --install` (0.4.0 and older need full xcode) | |
+| update | download the new zip and replace the app | `cd ~/nxtch && git pull && ./build.sh --install` |
+| uninstall | the three steps below | `~/nxtch/build.sh --uninstall`, then delete `~/nxtch` |
+| an older version | any zip on the [releases page](https://github.com/skyphose/nxtch/releases), 0.6.0 and later | `git checkout v0.4.0 && ./build.sh --install` (0.4.0 and older need full xcode) |
+| run without installing | | `./build.sh --run` |
 
-uninstall quits nxtch, turns off launch at login, and removes the app, its settings and caches, the shelf and the clipboard history in `~/Library/Application Support/nxtch`, and its audio and accessibility permissions. nothing is kept back, so theres no undo. files you dropped on the shelf from elsewhere are only referenced, so those stay where they were.
+### uninstall
 
-ive run the uninstall on my own mac only. it prints whether the permissions were reset. launch at login i couldnt check from outside: look under system settings > general > login items if you had it on.
+built yourself: `build.sh --uninstall` quits nxtch and turns off launch at login. then it removes the app, its settings and caches, the shelf and the clipboard history in `~/Library/Application Support/nxtch`, and its audio and accessibility permissions. nothing is kept back, so theres no undo. ive run it on my own mac only. it prints whether the permissions were reset. launch at login i couldnt check from outside: look under system settings > general > login items if you had it on.
+
+downloaded: no script comes in the zip, so three steps.
+
+1. in nxtch's gear menu, turn off launch at login, then quit.
+2. run this. it clears nxtch's permissions, settings, shelf and clipboard history:
+
+   ```bash
+   tccutil reset All dev.nxtch.app; defaults delete dev.nxtch.app; rm -rf ~/Library/Application\ Support/nxtch
+   ```
+
+3. drag Nxtch.app from Applications to the trash.
+
+do them in that order: macos only finds the permissions while the app is still there. either way, files you dropped on the shelf from elsewhere are only referenced, so those stay where they were.
 
 ### signing
 
-optional, and it needs xcode. `build.sh` signs with your apple development certificate if you have a valid one. a free apple id is enough: sign in under xcode > settings > accounts. check it took with `security find-identity -v -p codesigning`. if that says 0 valid identities, install apple's "worldwide developer relations - g3" intermediate from apple.com/certificateauthority - xcode didnt add it on my mac. with that, macos keeps the audio and accessibility grants across rebuilds. without one it signs ad hoc, and macos asks again after every update. set `SIGN_ID` to pick a specific identity.
+for building it yourself. optional, and it needs xcode. `build.sh` signs with your apple development certificate if you have a valid one. a free apple id is enough: sign in under xcode > settings > accounts. check it took with `security find-identity -v -p codesigning`. if that says 0 valid identities, install apple's "worldwide developer relations - g3" intermediate from apple.com/certificateauthority - xcode didnt add it on my mac. with that, macos keeps the audio and accessibility grants across rebuilds. without one it signs ad hoc, and macos asks again after every update. set `SIGN_ID` to pick a specific identity.
 
 the grants surviving a rebuild is untested. my certificate still shows 0 valid identities, so every build on my mac has been ad hoc.
 
@@ -174,7 +193,7 @@ Sources/Nxtch/
   Shelf.swift         shelf store: drops, selection, thumbnails
   Clipboard.swift     clipboard history store
 Tests/NxtchTests/     the rules that need no notch: file names, expiry, parsing, levels, colors
-Formula/nxtch.rb      the homebrew formula
+.github/workflows/release.yml   builds the release zip from a version tag
 Resources/Info.plist
 Resources/AppIcon.icns       the app icon
 Resources/icon.png           the same icon, for this readme
