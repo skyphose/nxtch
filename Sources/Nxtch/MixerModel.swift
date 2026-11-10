@@ -35,7 +35,13 @@ final class MixerModel: ObservableObject {
     @Published private var volumes: [String: Float]
     @Published private var muted: Set<String>
 
-    static let maxVolume: Float = 1.5
+    nonisolated static let maxVolume: Float = 1.5
+
+    /// A slider position as a level: kept inside 0...maxVolume, and pulled to exactly 100% when
+    /// within 2% of it, so it's easy to get back to untouched, zero-latency audio.
+    nonisolated static func level(_ value: Float, snap: Bool) -> Float {
+        snap && abs(value - 1) < 0.02 ? 1 : min(max(value, 0), maxVolume)
+    }
 
     /// Taps cost CPU here and in coreaudiod, so meters only run where they're visible.
     var meterScope: MeterScope = .primary { didSet { if meterScope != oldValue { resync() } } }
@@ -80,8 +86,7 @@ final class MixerModel: ObservableObject {
 
     /// `snap: false` (⇧ held) keeps every value as is.
     func setVolume(_ id: String, _ value: Float, snap: Bool = true) {
-        // Snap to 100% so it's easy to get back to untouched, zero-latency audio.
-        let value = snap && abs(value - 1) < 0.02 ? 1 : min(max(value, 0), Self.maxVolume)
+        let value = Self.level(value, snap: snap)
         volumes[id] = value
         if value > 0 { muted.remove(id) }
         changed(id)
@@ -228,47 +233,5 @@ final class MixerModel: ObservableObject {
         for id in taps.keys where !ids.contains(id) { taps[id] = nil }
         let uid = CA.deviceUID(output)
         for app in visible { apply(app.id, outputUID: uid) }
-    }
-}
-
-extension NSImage {
-    private static let noColor = NSColor(srgbRed: 1, green: 1, blue: 1, alpha: 1)
-
-    /// The most vivid colour in the image: the dominant hue among its saturated pixels, brightened
-    /// enough to read on black. White for an image with no real colour (a grey or monochrome icon).
-    var vividColor: NSColor {
-        let n = 24
-        var px = [UInt8](repeating: 0, count: n * n * 4)
-        guard let cg = cgImage(forProposedRect: nil, context: nil, hints: nil),
-              let ctx = CGContext(data: &px, width: n, height: n, bitsPerComponent: 8, bytesPerRow: n * 4,
-                                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
-        else { return Self.noColor }
-        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: n, height: n))
-
-        // Bucket pixels by hue, weighted by how colourful and opaque they are.
-        let buckets = 12
-        var weight = [CGFloat](repeating: 0, count: buckets)
-        var sum = [(r: CGFloat, g: CGFloat, b: CGFloat)](repeating: (0, 0, 0), count: buckets)
-        for i in stride(from: 0, to: px.count, by: 4) {
-            let a = CGFloat(px[i + 3]) / 255
-            guard a > 0.5 else { continue }
-            let r = CGFloat(px[i]) / 255 / a, g = CGFloat(px[i + 1]) / 255 / a, b = CGFloat(px[i + 2]) / 255 / a
-            let hi = max(r, g, b), lo = min(r, g, b), sat = hi == 0 ? 0 : (hi - lo) / hi
-            guard sat > 0.25, hi > 0.2 else { continue }
-            var hue: CGFloat = 0
-            if hi == r { hue = (g - b) / (hi - lo) } else if hi == g { hue = 2 + (b - r) / (hi - lo) } else { hue = 4 + (r - g) / (hi - lo) }
-            hue = (hue / 6).truncatingRemainder(dividingBy: 1); if hue < 0 { hue += 1 }
-            let k = min(buckets - 1, Int(hue * CGFloat(buckets))), w = sat * hi * a
-            weight[k] += w
-            sum[k].r += r * w; sum[k].g += g * w; sum[k].b += b * w
-        }
-        // A colour often straddles two buckets (a fox that is orange and amber), so the winner is
-        // the fullest bucket counted together with its two neighbours, and all three are averaged.
-        let near = { (k: Int) in [(k + buckets - 1) % buckets, k, (k + 1) % buckets] }
-        let total = { (k: Int) in near(k).reduce(0) { $0 + weight[$1] } }
-        guard let k = weight.indices.max(by: { total($0) < total($1) }), total(k) > 2 else { return Self.noColor }
-        let w = total(k), rgb = near(k).reduce((r: CGFloat(0), g: CGFloat(0), b: CGFloat(0))) { ($0.r + sum[$1].r, $0.g + sum[$1].g, $0.b + sum[$1].b) }
-        let c = NSColor(srgbRed: rgb.r / w, green: rgb.g / w, blue: rgb.b / w, alpha: 1)
-        return NSColor(hue: c.hueComponent, saturation: max(c.saturationComponent, 0.55), brightness: max(c.brightnessComponent, 0.9), alpha: 1)
     }
 }

@@ -49,9 +49,9 @@ final class ClipboardStore: ObservableObject {
     /// The app that was frontmost when the notch opened: where Return pastes to.
     var pasteTarget: pid_t?
 
-    static let unpinnedLimit = 100
+    nonisolated static let unpinnedLimit = 100
     /// Unpinned items older than this are dropped, so a copied secret doesn't sit on disk forever.
-    static let maxAge: TimeInterval = 7 * 24 * 3600
+    nonisolated static let maxAge: TimeInterval = 7 * 24 * 3600
     static let maxImageBytes = 20 * 1024 * 1024
     static let maxImagePixels = 50_000_000
     static let maxTextLength = 50_000
@@ -237,15 +237,23 @@ final class ClipboardStore: ObservableObject {
     /// Drops unpinned items that are too old or beyond the limit. Returns whether anything went.
     @discardableResult
     private func trim() -> Bool {
-        let before = items.count, cutoff = Date().addingTimeInterval(-Self.maxAge)
-        var unpinned = 0
-        items = items.filter { i in
-            if i.pinned { return true }
+        let (kept, dropped) = Self.trimmed(items, now: Date())
+        dropped.forEach(deleteImage)
+        items = kept
+        return !dropped.isEmpty
+    }
+
+    /// The rule itself: pinned items always stay. Unpinned ones go once they are older than
+    /// `maxAge`, or once there are more than `unpinnedLimit` ahead of them (newest first).
+    nonisolated static func trimmed(_ items: [ClipItem], now: Date) -> (kept: [ClipItem], dropped: [ClipItem]) {
+        let cutoff = now.addingTimeInterval(-maxAge)
+        var kept: [ClipItem] = [], dropped: [ClipItem] = [], unpinned = 0
+        for item in items {
+            if item.pinned { kept.append(item); continue }
             unpinned += 1
-            if unpinned > Self.unpinnedLimit || i.date < cutoff { deleteImage(i); return false }
-            return true
+            if unpinned > unpinnedLimit || item.date < cutoff { dropped.append(item) } else { kept.append(item) }
         }
-        return items.count != before
+        return (kept, dropped)
     }
 
     private func deleteImage(_ item: ClipItem) {

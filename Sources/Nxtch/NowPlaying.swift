@@ -28,6 +28,28 @@ struct NowPlayingInfo: Equatable {
     }
 }
 
+extension NowPlayingInfo {
+    /// One report from the helper. nil when nothing is playing (no title).
+    /// Any web page can set these through the Media Session API, so text is capped and times are
+    /// kept in a sane range.
+    init?(json o: [String: Any]) {
+        guard let title = o["title"] as? String, !title.isEmpty else { return nil }
+        func text(_ key: String) -> String? { (o[key] as? String).flatMap { $0.isEmpty ? nil : String($0.prefix(300)) } }
+        func seconds(_ key: String) -> Double? { (o[key] as? Double).flatMap { $0.isFinite && $0 >= 0 && $0 < 1e7 ? $0 : nil } }
+        self.init(
+            title: String(title.prefix(300)),
+            artist: text("artist"),
+            album: text("album"),
+            bundleID: o["bundle"] as? String,
+            parentBundleID: o["parent"] as? String,
+            isPlaying: o["playing"] as? Bool ?? false,
+            elapsed: seconds("elapsed"),
+            duration: seconds("duration").flatMap { $0 > 0 ? $0 : nil },
+            timestamp: (o["timestamp"] as? Double).flatMap { $0.isFinite ? Date(timeIntervalSince1970: $0) : nil },
+            rate: (o["rate"] as? Double).map { $0.isFinite ? min(max($0, -8), 8) : 1 } ?? 1)
+    }
+}
+
 enum MediaKey: Int32 {
     case playPause = 2   // kMRTogglePlayPause
     case next = 4        // kMRNextTrack
@@ -99,23 +121,7 @@ final class NowPlayingMonitor: ObservableObject {
         }
     }
 
-    private func handle(_ o: [String: Any]) {
-        guard let title = o["title"] as? String, !title.isEmpty else { info = nil; return }
-        // Any web page can set these through the Media Session API, so keep them in a sane range.
-        func seconds(_ key: String) -> Double? { (o[key] as? Double).flatMap { $0.isFinite && $0 >= 0 && $0 < 1e7 ? $0 : nil } }
-        func text(_ key: String) -> String? { (o[key] as? String).flatMap { $0.isEmpty ? nil : String($0.prefix(300)) } }
-        info = NowPlayingInfo(
-            title: String(title.prefix(300)),
-            artist: text("artist"),
-            album: text("album"),
-            bundleID: o["bundle"] as? String,
-            parentBundleID: o["parent"] as? String,
-            isPlaying: o["playing"] as? Bool ?? false,
-            elapsed: seconds("elapsed"),
-            duration: seconds("duration").flatMap { $0 > 0 ? $0 : nil },
-            timestamp: (o["timestamp"] as? Double).flatMap { $0.isFinite ? Date(timeIntervalSince1970: $0) : nil },
-            rate: (o["rate"] as? Double).map { $0.isFinite ? min(max($0, -8), 8) : 1 } ?? 1)
-    }
+    private func handle(_ o: [String: Any]) { info = NowPlayingInfo(json: o) }
 
     private static let commandScript = #"""
     ObjC.import('Foundation');

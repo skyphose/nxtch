@@ -22,19 +22,30 @@ the name is "no notch" with the o knocked out.
 
 ## install
 
-needs full xcode installed and opened once (it asks you to accept its license). then:
+needs full xcode installed and opened once (it asks you to accept its license). nxtch is built from source on your mac either way. theres no download to trust.
+
+with homebrew:
+
+```bash
+brew tap skyphose/nxtch https://github.com/skyphose/nxtch && brew install nxtch && nxtch
+```
+
+or by hand:
 
 ```bash
 git clone https://github.com/skyphose/nxtch.git ~/nxtch && ~/nxtch/build.sh --install
 ```
 
-that builds nxtch from source on your mac, copies it to /Applications and starts it. nothing is downloaded but the source. since you built it yourself, gatekeeper has nothing to quarantine, so theres no "unidentified developer" warning. ive only run this install on my own mac.
+by hand copies it to /Applications and starts it. homebrew keeps it in its own folder, and `nxtch` starts it. since you built it yourself, gatekeeper has nothing to quarantine, so theres no "unidentified developer" warning.
 
-| | |
-| --- | --- |
-| update | `cd ~/nxtch && git pull && ./build.sh --install` |
-| uninstall | `~/nxtch/build.sh --uninstall`, then delete `~/nxtch` |
-| run without installing | `./build.sh --run` |
+ive only run either install on my own mac. the homebrew one i tested from a local copy of this repo, not from github.
+
+| | by hand | homebrew |
+| --- | --- | --- |
+| update | `cd ~/nxtch && git pull && ./build.sh --install` | `brew upgrade nxtch` |
+| uninstall | `~/nxtch/build.sh --uninstall`, then delete `~/nxtch` | `nxtch --uninstall && brew uninstall nxtch` |
+| run without installing | `./build.sh --run` | |
+| an older version | `git checkout v0.3.0 && ./build.sh --install` | |
 
 uninstall quits nxtch, turns off launch at login, and removes the app, its settings and caches, the shelf and the clipboard history in `~/Library/Application Support/nxtch`, and its audio and accessibility permissions. nothing is kept back, so theres no undo. files you dropped on the shelf from elsewhere are only referenced, so those stay where they were.
 
@@ -123,30 +134,38 @@ with an ad hoc signature macos may ask again after every update. signing with yo
 - nxtch only ever deletes files inside its own shelf and clipboard folders, even if its saved lists were edited. when a shelf file moves, the destination moved it. nxtch never moves or deletes your originals itself.
 - now-playing data comes from any app or web page, so its times are clamped before use.
 
-what it costs to run, and what stays out on purpose, is in [SCOPE.md](SCOPE.md).
+what it costs to run, and what stays out on purpose, is in [SCOPE.md](SCOPE.md). what changed in each version is in [CHANGELOG.md](CHANGELOG.md).
 
 ## project layout
 
 ```
 Sources/Nxtch/
-  main.swift          app entry, settings, logging, global shortcut, ⌘V
+  main.swift          app entry, settings
+  Support.swift       timing, animation curves, logging, global shortcut, ⌘V, folders on disk
   NotchWindow.swift   panel, tabs model, mouse/drag/keyboard handling
-  NotchView.swift     notch shape, open/closed shells, tab bar, CALayer level meter
+  NotchView.swift     notch shape, open/closed shells, tab bar
+  LevelMeter.swift    the meters, their shared timer, and the color taken from an app icon
   MediaTab.swift      now-playing card, mixer rows
   ShelfTab.swift      shelf tiles, delete zone, drag source
   ClipboardTab.swift  search field, history rows
   MixerModel.swift    finds which apps make sound, keeps taps in sync, saves volumes
   Audio.swift         core audio helpers, process tap, real-time render callback
   NowPlaying.swift    now-playing helper and playback commands (osascript)
-  Shelf.swift         shelf store: safe file names, drops, thumbnails
+  Shelf.swift         shelf store: drops, selection, thumbnails
   Clipboard.swift     clipboard history store
+Tests/NxtchTests/     the rules that need no notch: file names, expiry, parsing, levels, colors
+Formula/nxtch.rb      the homebrew formula
 Resources/Info.plist
 Resources/AppIcon.icns       the app icon
 Resources/icon.png           the same icon, for this readme
 Resources/make-icon.swift    draws it
 build.sh
+CHANGELOG.md
 SCOPE.md
 ```
+
+`swift test` runs the tests. 19 of them, none touch audio, the pasteboard or the screen. those parts i test by hand.
+
 
 ## license
 

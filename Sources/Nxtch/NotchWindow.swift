@@ -167,6 +167,13 @@ final class NotchController {
         panel.orderFrontRegardless()
         panel.ignoresMouseEvents = true
 
+        observeSettings()
+        observeSystem()
+        installInput()
+    }
+
+    /// Settings that change how the panel behaves.
+    private func observeSettings() {
         settings.$showInFullScreen
             .sink { [weak self] show in self?.applySpaceBehavior(showInFullScreen: show) }
             .store(in: &bag)
@@ -174,7 +181,10 @@ final class NotchController {
         settings.$showEars.combineLatest(vm.$tab).receive(on: DispatchQueue.main)
             .sink { [weak self] _ in MainActor.assumeIsolated { self?.updateMeterScope() } }
             .store(in: &bag)
+    }
 
+    /// Screen changes, menus opening, and a paste asking the panel to close.
+    private func observeSystem() {
         let nc = NotificationCenter.default
         nc.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.position() }
@@ -189,7 +199,10 @@ final class NotchController {
         nc.addObserver(forName: .nxtchRequestClose, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.setOpen(false) }
         }
+    }
 
+    /// Everything that listens for input: clicks elsewhere, Esc, the cursor check and the shortcut.
+    private func installInput() {
         // A click in another app closes nxtch. That's all nxtch watches system-wide: hover and
         // drags come from the cursor check below, since watching every mouse move woke nxtch
         // 60-120 times a second whenever the mouse moved anywhere.

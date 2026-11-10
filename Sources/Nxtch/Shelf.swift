@@ -2,49 +2,6 @@ import AppKit
 import QuickLookThumbnailing
 import UniformTypeIdentifiers
 
-/// ~/Library/Application Support/nxtch/<name>, readable by this user only.
-enum AppFiles {
-    static func dir(_ name: String) -> URL {
-        let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("nxtch/\(name)", isDirectory: true)
-        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path)   // also fixes existing folders
-        return url
-    }
-
-    /// A file name that can't leave its folder or disguise itself: no path separators or "..",
-    /// no control or bidi-override characters, not hidden, not absurdly long.
-    static func safeName(_ raw: String, fallback: String = "item") -> String {
-        let cleaned = String(String.UnicodeScalarView(raw.unicodeScalars.filter {
-            !CharacterSet.controlCharacters.contains($0) && $0.properties.generalCategory != .format
-        }))
-        .replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
-        .trimmingCharacters(in: CharacterSet(charactersIn: ". ").union(.whitespacesAndNewlines))
-        let ext = (cleaned as NSString).pathExtension
-        let name = cleaned.count <= 120 || ext.isEmpty || ext.count > 10
-            ? String(cleaned.prefix(120))
-            : String((cleaned as NSString).deletingPathExtension.prefix(110)) + "." + ext
-        return name.isEmpty ? fallback : name
-    }
-
-    /// A URL in `dir` for `name` (sanitized) that doesn't exist yet.
-    static func unique(_ name: String, in dir: URL) -> URL? {
-        let safe = safeName(name)
-        let base = (safe as NSString).deletingPathExtension, ext = (safe as NSString).pathExtension
-        var url = dir.appendingPathComponent(safe)
-        var n = 2
-        while FileManager.default.fileExists(atPath: url.path) {
-            url = dir.appendingPathComponent(ext.isEmpty ? "\(base) \(n)" : "\(base) \(n).\(ext)")
-            n += 1
-        }
-        return contains(dir, url) ? url : nil
-    }
-
-    static func contains(_ dir: URL, _ url: URL) -> Bool {
-        url.standardizedFileURL.deletingLastPathComponent().path == dir.standardizedFileURL.path
-    }
-}
-
 struct ShelfItem: Identifiable, Codable, Equatable {
     let id: UUID
     let path: String

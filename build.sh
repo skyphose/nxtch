@@ -13,7 +13,7 @@ APP=Nxtch.app
 BUNDLE_ID=dev.nxtch.app
 
 if [[ " $* " == *" --uninstall "* ]]; then
-  INSTALLED="/Applications/$APP"
+  INSTALLED="${NXTCH_APP:-/Applications/$APP}"   # homebrew keeps the app somewhere else
   LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
   # Launch at login is registered against the installed app, so turn it off before removing it.
   [[ -x "$INSTALLED/Contents/MacOS/Nxtch" ]] && "$INSTALLED/Contents/MacOS/Nxtch" --unregister-login-item || true
@@ -23,7 +23,7 @@ if [[ " $* " == *" --uninstall "* ]]; then
   pkill -x Nxtch 2>/dev/null || true
   for _ in {1..50}; do pgrep -x Nxtch >/dev/null || break; sleep 0.1; done
   "$LSREGISTER" -u "$INSTALLED" "$PWD/$APP" >/dev/null 2>&1 || true
-  rm -rf "$INSTALLED" "$APP"
+  [[ -n "${NXTCH_KEEP_APP:-}" ]] || rm -rf "$INSTALLED" "$APP"   # homebrew removes its own copy
   rm -rf "$HOME/Library/Application Support/nxtch"
   # Settings, and everything macOS keeps per app. dev.notchmixer.app is the id nxtch had under its first name.
   for ID in "$BUNDLE_ID" dev.notchmixer.app; do
@@ -36,7 +36,8 @@ if [[ " $* " == *" --uninstall "* ]]; then
   exit 0
 fi
 
-swift build -c release
+# SWIFT_BUILD_FLAGS: extra flags for swift build (homebrew passes --disable-sandbox).
+swift build -c release ${=SWIFT_BUILD_FLAGS:-}
 rm -rf "$APP" && mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$(swift build -c release --show-bin-path)/Nxtch" "$APP/Contents/MacOS/Nxtch"
 cp Resources/Info.plist "$APP/Contents/Info.plist"

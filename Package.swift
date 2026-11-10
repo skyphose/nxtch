@@ -6,5 +6,6 @@ let package = Package(
     platforms: [.macOS("14.2")],
     targets: [
         .executableTarget(name: "Nxtch", path: "Sources/Nxtch"),
+        .testTarget(name: "NxtchTests", dependencies: ["Nxtch"], path: "Tests/NxtchTests"),
     ]
 )
