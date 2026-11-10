@@ -9,10 +9,12 @@ import os
 
 // MARK: Main-thread timing
 
-/// Runs `body` on the main actor after `delay` seconds.
-@MainActor
-func after(_ delay: TimeInterval, _ body: @escaping @MainActor () -> Void) {
-    DispatchQueue.main.asyncAfter(deadline: .now() + delay) { MainActor.assumeIsolated(body) }
+/// Runs `body` on the main actor after `delay` seconds. Cancel the returned item to call it off.
+@MainActor @discardableResult
+func after(_ delay: TimeInterval, _ body: @escaping @MainActor () -> Void) -> DispatchWorkItem {
+    let work = DispatchWorkItem { MainActor.assumeIsolated(body) }
+    DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    return work
 }
 
 extension Timer {
@@ -50,10 +52,6 @@ enum Log {
     static let notch = Logger(subsystem: subsystem, category: "notch")
     static let shelf = Logger(subsystem: subsystem, category: "shelf")
     static let clipboard = Logger(subsystem: subsystem, category: "clipboard")
-}
-
-extension Notification.Name {
-    static let nxtchRequestClose = Notification.Name("nxtchRequestClose")
 }
 
 // MARK: Global shortcut

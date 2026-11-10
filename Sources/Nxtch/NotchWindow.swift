@@ -1,6 +1,5 @@
 import AppKit
 import Carbon.HIToolbox
-import Combine
 import SwiftUI
 
 /// Borderless, non-activating panel that sits over the notch (same setup boring.notch uses).
@@ -17,10 +16,7 @@ final class NotchPanel: NSPanel {
         backgroundColor = .clear
         hasShadow = false
         isMovable = false
-        titleVisibility = .hidden
-        titlebarAppearsTransparent = true
         level = NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue + 3)
-        collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
         isReleasedWhenClosed = false
     }
     override var canBecomeKey: Bool { true }
@@ -32,9 +28,12 @@ struct NotchGeometry: Equatable {
     var notchSize: CGSize
     var screenFrame: CGRect
 
+    /// A "fake notch" for displays without one.
+    static let fallbackNotch = CGSize(width: 200, height: 32)
+
     static func current() -> (NSScreen, NotchGeometry)? {
         guard let screen = NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }) ?? NSScreen.main else { return nil }
-        var size = CGSize(width: 200, height: 32) // fallback "fake notch" for non-notch displays
+        var size = fallbackNotch
         if screen.safeAreaInsets.top > 0 { size.height = screen.safeAreaInsets.top }
         if let l = screen.auxiliaryTopLeftArea, let r = screen.auxiliaryTopRightArea {
             size.width = screen.frame.width - l.width - r.width
@@ -63,8 +62,14 @@ final class NotchViewModel: ObservableObject {
     @Published var isDropTargeted = false
     @Published var geometry: NotchGeometry
     @Published var tab: NotchTab {
-        didSet { UserDefaults.standard.set(tab.rawValue, forKey: "tab") }
+        didSet { UserDefaults.standard.set(tab.rawValue, forKey: "tab"); tabChanged?() }
     }
+    var tabChanged: (@MainActor () -> Void)?
+
+    /// Corner radii of the open shape. The top corners flare out past the body, so the open
+    /// shape is `2 * openTopRadius` wider than its content, and content sits `contentInset` in.
+    static let openTopRadius: CGFloat = 19
+    static let contentInset: CGFloat = openTopRadius + 12
 
     static let openWidth: CGFloat = 560
     static let earWidth: CGFloat = 34
@@ -148,7 +153,6 @@ final class NotchController {
     private var pinnedOpen = false
     private var pollTimer: Timer?
     private var hotkey: Hotkey?
-    private var bag = Set<AnyCancellable>()
 
     // Drag detection: a drag is in progress when a mouse button is down and the drag pasteboard
     // has changed since the button went down.
@@ -167,7 +171,7 @@ final class NotchController {
         self.settings = settings
         self.shelf = shelf
         self.clipboard = clipboard
-        let geo = NotchGeometry.current()?.1 ?? NotchGeometry(notchSize: CGSize(width: 200, height: 32), screenFrame: .zero)
+        let geo = NotchGeometry.current()?.1 ?? NotchGeometry(notchSize: NotchGeometry.fallbackNotch, screenFrame: .zero)
         vm = NotchViewModel(geometry: geo)
         panel = NotchPanel(contentRect: .zero)
         let host = NSHostingView(rootView: NotchView(vm: vm, model: model, nowPlaying: nowPlaying, settings: settings,
@@ -183,15 +187,22 @@ final class NotchController {
         installInput()
     }
 
-    /// Settings that change how the panel behaves.
+    /// Settings and the tab change how the panel behaves. Meter taps follow what's on screen.
     private func observeSettings() {
-        settings.$showInFullScreen
-            .sink { [weak self] show in self?.applySpaceBehavior(showInFullScreen: show) }
-            .store(in: &bag)
-        // Meter taps follow what's on screen. (@Published fires before the value changes, hence .receive.)
-        settings.$showEars.combineLatest(vm.$tab).receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in MainActor.assumeIsolated { self?.updateMeterScope() } }
-            .store(in: &bag)
+        settings.onChange = { [weak self] in self?.applySettings() }
+        vm.tabChanged = { [weak self] in self?.updateMeterScope() }
+        applySettings()
+    }
+
+    private func applySettings() {
+        var b: NSWindow.CollectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
+        if settings.showInFullScreen { b.insert(.fullScreenAuxiliary) }
+        if panel.collectionBehavior != b {
+            panel.collectionBehavior = b
+            panel.orderFrontRegardless()
+        }
+        clipboard.enabled = settings.clipboardEnabled
+        updateMeterScope()
     }
 
     /// Screen changes, menus opening, and a paste asking the panel to close.
@@ -207,9 +218,7 @@ final class NotchController {
         nc.addObserver(forName: NSMenu.didEndTrackingNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.menuTracking = false; self?.trackMouse() }
         }
-        nc.addObserver(forName: .nxtchRequestClose, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.setOpen(false) }
-        }
+        clipboard.requestClose = { [weak self] in self?.setOpen(false) }
     }
 
     /// Everything that listens for input: clicks elsewhere, Esc, the cursor check and the shortcut.
@@ -252,16 +261,9 @@ final class NotchController {
         }
     }
 
-    /// Only touch the window when the value actually changes (this runs on every mouse move).
+    /// Only touch the window when the value actually changes (this runs on every cursor check).
     private func setIgnoresMouse(_ ignore: Bool) {
         if panel.ignoresMouseEvents != ignore { panel.ignoresMouseEvents = ignore }
-    }
-
-    private func applySpaceBehavior(showInFullScreen: Bool) {
-        var b: NSWindow.CollectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
-        if showInFullScreen { b.insert(.fullScreenAuxiliary) }
-        panel.collectionBehavior = b
-        panel.orderFrontRegardless()
     }
 
     private func position() {
@@ -290,7 +292,7 @@ final class NotchController {
     private var openShapeRect: NSRect {
         let f = vm.geometry.screenFrame
         let s = vm.openSize(rows: model.apps.count, nowPlaying: nowPlaying.info != nil, shelfItems: shelf.items.count)
-        let w = s.width + 38 // + top flares
+        let w = s.width + 2 * NotchViewModel.openTopRadius
         return NSRect(x: f.midX - w / 2, y: f.maxY - s.height, width: w, height: s.height)
     }
 
@@ -338,11 +340,7 @@ final class NotchController {
             if overShape || hits(openShapeRect.insetBy(dx: -10, dy: -10), p) || menuTracking {
                 closeWork?.cancel(); closeWork = nil
             } else if closeWork == nil, !buttonDown {
-                let work = DispatchWorkItem { [weak self] in
-                    MainActor.assumeIsolated { self?.closeWork = nil; self?.setOpen(false) }
-                }
-                closeWork = work
-                DispatchQueue.main.asyncAfter(deadline: .now() + Self.closeDelay, execute: work)
+                closeWork = after(Self.closeDelay) { [weak self] in self?.closeWork = nil; self?.setOpen(false) }
             }
             return
         }
@@ -359,18 +357,12 @@ final class NotchController {
 
         if hits(notchTriggerRect, p), !buttonDown {
             guard openWork == nil else { return }
-            let work = DispatchWorkItem { [weak self] in
-                MainActor.assumeIsolated {
-                    guard let self else { return }
-                    self.openWork = nil
-                    // Still resting on the notch and not dragging? Then open.
-                    if self.hits(self.notchTriggerRect, NSEvent.mouseLocation), !self.mouseButtonDown {
-                        self.setOpen(true, reason: "hover")
-                    }
-                }
+            openWork = after(Self.openDwell) { [weak self] in
+                guard let self else { return }
+                openWork = nil
+                // Still resting on the notch and not dragging? Then open.
+                if hits(notchTriggerRect, NSEvent.mouseLocation), !mouseButtonDown { setOpen(true, reason: "hover") }
             }
-            openWork = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + Self.openDwell, execute: work)
         } else {
             openWork?.cancel(); openWork = nil
         }

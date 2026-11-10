@@ -155,6 +155,7 @@ private struct AppRow: View {
     var body: some View {
         let muted = model.isMuted(app.id)
         let volume = model.volume(app.id)
+        let boosted = volume > 1.001 && !muted
         HStack(spacing: 10) {
             Image(nsImage: app.icon).resizable().interpolation(.high)
                 .frame(width: 26, height: 26)
@@ -175,7 +176,7 @@ private struct AppRow: View {
                 Slider(value: Binding(get: { Double(muted ? 0 : volume) }, set: { adjust(to: $0) }),
                        in: 0...Double(MixerModel.maxVolume))
                     .controlSize(.mini)
-                    .tint(volume > 1.001 && !muted ? .orange : .white)
+                    .tint(boosted ? .orange : .white)
                     .background(alignment: .leading) {
                         // Tick at 100%.
                         GeometryReader { g in
@@ -187,7 +188,7 @@ private struct AppRow: View {
             }
             Text("\(Int(((muted ? 0 : volume) * 100).rounded()))%")
                 .font(.system(size: 11, weight: .medium).monospacedDigit())
-                .foregroundStyle(volume > 1.001 && !muted ? .orange : .secondary)
+                .foregroundStyle(boosted ? .orange : .secondary)
                 .frame(width: 40, alignment: .trailing)
             Button { model.toggleMute(app.id) } label: {
                 Image(systemName: muted ? "speaker.slash.fill" : speakerIcon(volume))

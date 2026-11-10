@@ -48,7 +48,7 @@ final class ShelfStore: ObservableObject {
 
     func add(_ url: URL, owned: Bool) {
         guard FileManager.default.fileExists(atPath: url.path) else { return }
-        items.removeAll { $0.path == url.path }
+        forget(Set(items.filter { $0.path == url.path }.map(\.id)))   // the same file again moves to the end
         let item = ShelfItem(id: UUID(), path: url.path, owned: owned)
         items.append(item)
         Log.shelf.info("added owned=\(owned, privacy: .public) count=\(self.items.count, privacy: .public)")
@@ -56,14 +56,22 @@ final class ShelfStore: ObservableObject {
         save()
     }
 
-    func remove(_ item: ShelfItem) { remove(item, deleteFile: true) }
+    func remove(_ gone: [ShelfItem]) { remove(gone, deleteFile: true) }
 
-    private func remove(_ item: ShelfItem, deleteFile: Bool) {
-        items.removeAll { $0.id == item.id }
-        thumbnails[item.id] = nil
-        selection.remove(item.id)
-        if deleteFile { deleteOwned(item) }
+    /// Takes items off the shelf in one go: one redraw and one save, however many there are.
+    private func remove(_ gone: [ShelfItem], deleteFile: Bool) {
+        guard !gone.isEmpty else { return }
+        forget(Set(gone.map(\.id)))
+        if deleteFile { gone.forEach(deleteOwned) }
         save()
+    }
+
+    /// Drops items along with their thumbnails and selection.
+    private func forget(_ ids: Set<UUID>) {
+        guard !ids.isEmpty else { return }
+        items.removeAll { ids.contains($0.id) }
+        thumbnails = thumbnails.filter { !ids.contains($0.key) }
+        selection.subtract(ids)
     }
 
     /// Only ever deletes nxtch's own copies, even if the saved list was tampered with, and never
@@ -93,7 +101,7 @@ final class ShelfStore: ObservableObject {
         selection.contains(item.id) ? items.filter { selection.contains($0.id) } : [item]
     }
 
-    func clear() { actionItems.forEach(remove) }
+    func clear() { remove(actionItems) }
 
     // MARK: Selection
 
@@ -121,9 +129,7 @@ final class ShelfStore: ObservableObject {
 
     /// Drops items whose files were moved or deleted elsewhere.
     func prune() {
-        let before = items.count
-        items.removeAll { !FileManager.default.fileExists(atPath: $0.path) }
-        if items.count != before { selection.formIntersection(items.map(\.id)); save() }
+        remove(items.filter { !FileManager.default.fileExists(atPath: $0.path) }, deleteFile: false)
     }
 
     func open(_ item: ShelfItem) { NSWorkspace.shared.open(item.url) }
@@ -146,24 +152,26 @@ final class ShelfStore: ObservableObject {
     func finishDrag(_ dragged: [ShelfItem], operation: NSDragOperation) {
         defer { dragging = []; deleteTargeted = false; droppedInternally = false }
         guard !droppedInternally, !operation.isEmpty else { return }
-        for item in dragged where items.contains(where: { $0.id == item.id }) { release(item, operation: operation) }
+        let ids = Set(items.map(\.id))
+        remove(dragged.filter { ids.contains($0.id) && leavesShelf($0, operation) }, deleteFile: false)
     }
 
-    private func release(_ item: ShelfItem, operation: NSDragOperation) {
+    /// Whether a dragged-out item leaves the shelf.
+    private func leavesShelf(_ item: ShelfItem, _ operation: NSDragOperation) -> Bool {
         // nxtch's own copy is deleted with the item, so only let go of it when the destination
         // said it moved or copied the file. A drop that just took the path keeps it on the shelf.
         if item.owned, operation.isDisjoint(with: [.move, .copy]) {
             Log.shelf.info("dragged out op=\(operation.rawValue, privacy: .public); kept (not moved or copied)")
-            return
+            return false
         }
         Log.shelf.info("dragged out op=\(operation.rawValue, privacy: .public); removed from shelf")
         // The drag ending only means the destination accepted. Finder moves or copies the file
         // afterwards, so deleting nxtch's copy now pulls it out from under Finder (error -8058).
         // A move takes the file away by itself; a copy leaves ours behind, deleted a minute later.
-        remove(item, deleteFile: false)
         if item.owned, !operation.contains(.move) {
             after(60) { [weak self] in self?.deleteOwned(item) }
         }
+        return true
     }
 
     /// A drop on the Delete zone. The only thing that can be dragged there is a shelf item.
@@ -172,7 +180,7 @@ final class ShelfStore: ObservableObject {
         let doomed = items.filter { dragging.contains($0.id) }
         guard !doomed.isEmpty else { return false }
         Log.shelf.info("deleted via drop zone count=\(doomed.count, privacy: .public)")
-        doomed.forEach(remove)
+        remove(doomed)
         return true
     }
 

@@ -46,6 +46,8 @@ final class ClipboardStore: ObservableObject {
     @Published private(set) var picked: Set<UUID> = []
 
     var enabled = true
+    /// Closes the notch, so focus goes back to the app a paste is for.
+    var requestClose: (@MainActor () -> Void)?
     /// The app that was frontmost when the notch opened: where Return pastes to.
     var pasteTarget: pid_t?
 
@@ -144,7 +146,7 @@ final class ClipboardStore: ObservableObject {
         Log.clipboard.info("paste kind=\(item.kind.rawValue, privacy: .public)")
         copy(item)
         let target = pasteTarget
-        NotificationCenter.default.post(name: .nxtchRequestClose, object: nil)
+        requestClose?()
         if let target { after(0.18) { Keystroke.paste(into: target) } }
     }
 
@@ -206,12 +208,14 @@ final class ClipboardStore: ObservableObject {
         if let urls = pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL], !urls.isEmpty {
             insert(ClipItem(id: UUID(), kind: .files, paths: urls.map(\.path), sourceBundleID: source, date: Date()))
         } else if types.contains(NSPasteboard.PasteboardType.png.rawValue) || types.contains(NSPasteboard.PasteboardType.tiff.rawValue) {
-            guard let data = pb.data(forType: .png) ?? pb.data(forType: .tiff), data.count <= Self.maxImageBytes,
+            // Each read copies the image across processes, so read it once.
+            let pngData = pb.data(forType: .png)
+            guard let data = pngData ?? pb.data(forType: .tiff), data.count <= Self.maxImageBytes,
                   let src = CGImageSourceCreateWithData(data as CFData, nil),
                   let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
                   let w = props[kCGImagePropertyPixelWidth] as? Int, let h = props[kCGImagePropertyPixelHeight] as? Int,
                   w > 0, h > 0, w <= Self.maxImagePixels / h,   // refuse decompression bombs before decoding (no w * h overflow)
-                  let png = pb.data(forType: .png) ?? NSBitmapImageRep(data: data)?.representation(using: .png, properties: [:])
+                  let png = pngData ?? NSBitmapImageRep(data: data)?.representation(using: .png, properties: [:])
             else { return }
             let name = UUID().uuidString + ".png"
             guard FileManager.default.createFile(atPath: storage.appendingPathComponent(name).path, contents: png,

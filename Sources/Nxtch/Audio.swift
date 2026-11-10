@@ -31,11 +31,7 @@ enum CA {
     }
 
     static func string(_ object: AudioObjectID, _ selector: AudioObjectPropertySelector) -> String? {
-        var addr = address(selector)
-        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
-        var value: Unmanaged<CFString>?
-        let status = withUnsafeMutablePointer(to: &value) { AudioObjectGetPropertyData(object, &addr, 0, nil, &size, $0) }
-        guard status == noErr, let value else { return nil }
+        guard let value = get(object, selector, Unmanaged<CFString>?.none) ?? nil else { return nil }
         return value.takeRetainedValue() as String
     }
 

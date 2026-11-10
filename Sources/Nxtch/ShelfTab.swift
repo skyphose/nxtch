@@ -198,7 +198,7 @@ final class ShelfDragSourceView: NSView, NSDraggingSource {
             ("Open", { group.forEach(shelf.open) }),
             ("Show in Finder", { NSWorkspace.shared.activateFileViewerSelecting(group.map(\.url)) }),
             ("Copy", { shelf.copyToClipboard(group) }), ("AirDrop…", { shelf.airDrop(group) }), ("", {}),
-            ("Delete", { group.forEach(shelf.remove) }),
+            ("Delete", { shelf.remove(group) }),
         ]
         for (title, action) in entries {
             menu.addItem(title.isEmpty ? .separator() : ClosureMenuItem(title: title, action: action))

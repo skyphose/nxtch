@@ -38,7 +38,7 @@ struct NotchView: View {
     @ObservedObject var shelf: ShelfStore
     @ObservedObject var clipboard: ClipboardStore
 
-    private var topRadius: CGFloat { vm.isOpen ? 19 : 6 }
+    private var topRadius: CGFloat { vm.isOpen ? NotchViewModel.openTopRadius : 6 }
     private var bottomRadius: CGFloat { vm.isOpen ? 24 : 12 }
     private var earsVisible: Bool { settings.showEars && (model.anyPlaying || !shelf.isEmpty) }
 
@@ -56,7 +56,7 @@ struct NotchView: View {
                 if vm.isOpen {
                     OpenContent(vm: vm, model: model, nowPlaying: nowPlaying, settings: settings,
                                 shelf: shelf, clipboard: clipboard)
-                        .padding(.horizontal, topRadius + 12)
+                        .padding(.horizontal, NotchViewModel.contentInset)
                         .padding(.bottom, 10)
                         .transition(.opacity.combined(with: .scale(scale: 0.92, anchor: .top)))
                 } else {

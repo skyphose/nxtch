@@ -48,6 +48,9 @@ final class MixerModel: ObservableObject {
     /// Which app owns the now-playing media (used by `.primary`).
     var isNowPlayingOwner: (AppEntry) -> Bool = { _ in false }
 
+    /// The closed notch meters the now-playing app, so move its tap when that app changes.
+    func nowPlayingOwnerChanged() { if meterScope == .primary { resync() } }
+
     private var taps: [String: AppVolumeTap] = [:]
     private var states: [String: TapState] = [:]
     private var lastPlayed: [String: Date] = [:]

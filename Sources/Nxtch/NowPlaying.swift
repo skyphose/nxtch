@@ -59,6 +59,10 @@ enum MediaKey: Int32 {
 @MainActor
 final class NowPlayingMonitor: ObservableObject {
     @Published private(set) var info: NowPlayingInfo?
+    /// What the helper last said. `info` can run ahead of it after a button press.
+    private var reported: NowPlayingInfo?
+    /// Called when a different app takes over now playing.
+    var ownerChanged: (@MainActor () -> Void)?
 
     private var process: Process?
     private var buffer = Data()
@@ -77,6 +81,9 @@ final class NowPlayingMonitor: ObservableObject {
             i.isPlaying.toggle()
             i.timestamp = Date()
             info = i
+            // The helper only reports changes. If the app ignored the press, nothing comes back,
+            // so fall back to what it last said.
+            after(1.5) { [weak self] in if let self, info != reported { info = reported } }
         }
     }
 
@@ -121,7 +128,13 @@ final class NowPlayingMonitor: ObservableObject {
         }
     }
 
-    private func handle(_ o: [String: Any]) { info = NowPlayingInfo(json: o) }
+    private func handle(_ o: [String: Any]) {
+        let new = NowPlayingInfo(json: o)
+        let ownerMoved = new?.bundleID != reported?.bundleID || new?.parentBundleID != reported?.parentBundleID
+        reported = new
+        info = new
+        if ownerMoved { ownerChanged?() }
+    }
 
     private static let commandScript = #"""
     ObjC.import('Foundation');

@@ -175,6 +175,6 @@ final class LayoutTests: XCTestCase {
         // four tiles and the Delete zone fit across the open notch
         let n = CGFloat(NotchViewModel.shelfColumns)
         let row = n * NotchViewModel.shelfTileSize.width + (n - 1) * NotchViewModel.shelfSpacing
-        XCTAssertLessThanOrEqual(row + 8 + 110, NotchViewModel.openWidth - 2 * (19 + 12))
+        XCTAssertLessThanOrEqual(row + 8 + 110, NotchViewModel.openWidth - 2 * NotchViewModel.contentInset)
     }
 }

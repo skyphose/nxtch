@@ -1,12 +1,10 @@
 import AppKit
-import Combine
 import ServiceManagement
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var nowPlaying: NowPlayingMonitor?
     private var notch: NotchController?
-    private var bag = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let model = MixerModel(), nowPlaying = NowPlayingMonitor(), settings = AppSettings()
@@ -14,7 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.isNowPlayingOwner = { [weak nowPlaying] app in
             MainActor.assumeIsolated { nowPlaying?.info?.belongs(to: app.id) ?? false }
         }
-        settings.$clipboardEnabled.sink { clipboard.enabled = $0 }.store(in: &bag)
+        nowPlaying.ownerChanged = { [weak model] in model?.nowPlayingOwnerChanged() }
         self.nowPlaying = nowPlaying
         notch = NotchController(model: model, nowPlaying: nowPlaying, settings: settings, shelf: shelf, clipboard: clipboard)
     }
@@ -41,12 +39,14 @@ MainActor.assumeIsolated {
 @MainActor
 final class AppSettings: ObservableObject {
     private let d = UserDefaults.standard
+    /// Called after any setting below changes (not launch at login, which only the system reads).
+    var onChange: (@MainActor () -> Void)?
 
     /// App icon and level meter beside the notch while audio plays. They can cover menu bar items.
-    @Published var showEars: Bool { didSet { d.set(showEars, forKey: "showEars") } }
+    @Published var showEars: Bool { didSet { d.set(showEars, forKey: "showEars"); onChange?() } }
     /// Appear on full-screen Spaces. Off by default so it never covers full-screen content.
-    @Published var showInFullScreen: Bool { didSet { d.set(showInFullScreen, forKey: "showInFullScreen") } }
-    @Published var clipboardEnabled: Bool { didSet { d.set(clipboardEnabled, forKey: "clipboardEnabled") } }
+    @Published var showInFullScreen: Bool { didSet { d.set(showInFullScreen, forKey: "showInFullScreen"); onChange?() } }
+    @Published var clipboardEnabled: Bool { didSet { d.set(clipboardEnabled, forKey: "clipboardEnabled"); onChange?() } }
     @Published var launchAtLogin: Bool {
         didSet {
             guard launchAtLogin != (SMAppService.mainApp.status == .enabled) else { return }
