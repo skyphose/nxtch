@@ -69,7 +69,7 @@ measured on one m-series macbook pro running macos 27, notch closed, one app pla
 
 after the 0.3 cleanup, with zoom holding a silent audio stream open: 0.8% cpu, 15 MB footprint (`footprint`, not resident). thats not the same setup as the line above, so treat it as direction, not a before/after.
 
-- meters are plain `CALayer`s on their own timer: 30 fps with sound, 4 fps in silence. swiftui animation re-laid out the whole panel every frame. that alone was about 10%.
+- meters are plain `CALayer`s on one shared timer: 30 fps with sound, 4 fps in silence, stopped when none is on screen. five meters cost 30 wakeups a second, not 150. swiftui animation re-laid out the whole panel every frame. that alone was about 10%.
 - metering taps only run where a meter is visible. every playing app while the media tab is open, one app (the one in the ears) while closed, none otherwise. each tap also costs cpu in `coreaudiod`. volume taps only exist for apps not at 100%.
 - audio state is event-driven: core audio notifications for the process list and each process's output state, with a 5 s safety check.
 - no system-wide mouse-move monitor. a 10x/s cursor check does hover and drag detection. system-wide, nxtch only watches clicks.

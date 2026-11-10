@@ -371,6 +371,7 @@ final class NotchController {
         if open {
             shelf.prune()
             clipboard.expire()
+            clipboard.selecting = false
             clipboard.pasteTarget = NSWorkspace.shared.frontmostApplication?.processIdentifier
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
         } else {
@@ -381,7 +382,7 @@ final class NotchController {
                 panel.orderFrontRegardless()
             }
         }
-        withAnimation(open ? .spring(response: 0.42, dampingFraction: 0.8) : .spring(response: 0.45, dampingFraction: 1.0)) {
+        withAnimation(.notch(opening: open)) {
             vm.isOpen = open
         }
         setIgnoresMouse(!(open && hits(openShapeRect, NSEvent.mouseLocation)))

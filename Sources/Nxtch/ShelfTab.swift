@@ -6,11 +6,12 @@ struct ShelfTab: View {
 
     var body: some View {
         if shelf.items.isEmpty {
-            VStack(spacing: 6) {
-                Image(systemName: "tray.and.arrow.down").font(.system(size: 22, weight: .light))
-                Text("Drop here").font(.system(size: 12, weight: .medium))
+            // No words: files go in, files come out.
+            VStack(spacing: 3) {
+                Image(systemName: "arrow.up.arrow.down").font(.system(size: 13, weight: .medium))
+                Image(systemName: "tray").font(.system(size: 28, weight: .light))
             }
-            .foregroundStyle(.white.opacity(0.75))
+            .foregroundStyle(.white.opacity(0.6))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -34,7 +35,7 @@ struct ShelfTab: View {
                         .transition(.scale(scale: 0.6).combined(with: .opacity))
                 }
             }
-            .animation(.spring(response: 0.3, dampingFraction: 0.75), value: shelf.isDragging)
+            .animation(.notch, value: shelf.isDragging)
         }
     }
 }
@@ -61,7 +62,7 @@ private struct DeleteZone: View {
                 .strokeBorder(Color.red.opacity(hot ? 0 : 0.6), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
         )
         .scaleEffect(hot ? 1.05 : 1)
-        .animation(.spring(response: 0.25, dampingFraction: 0.6), value: hot)
+        .animation(.control, value: hot)
         .padding(.vertical, 8)
         .onDrop(of: [.fileURL], isTargeted: $hot) { _ in
             shelf.deleteDragged()

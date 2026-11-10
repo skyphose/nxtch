@@ -3,6 +3,7 @@ import ApplicationServices
 import Carbon.HIToolbox
 import Combine
 import ServiceManagement
+import SwiftUI
 import os
 
 @MainActor
@@ -54,6 +55,22 @@ extension Timer {
         let t = scheduledTimer(withTimeInterval: interval, repeats: true) { _ in MainActor.assumeIsolated(body) }
         t.tolerance = tolerance
         return t
+    }
+}
+
+// MARK: Animation
+
+extension Animation {
+    /// The panel opening, and anything inside it changing size.
+    static let notch = Animation.spring(response: 0.3, dampingFraction: 0.86)
+    /// The panel closing: quicker, and no bounce on the way out.
+    static let notchClose = Animation.spring(response: 0.24, dampingFraction: 1)
+    /// Small controls reacting to the pointer.
+    static let control = Animation.spring(response: 0.2, dampingFraction: 0.7)
+
+    /// With Reduce Motion on, a short fade replaces the springs.
+    static func notch(opening: Bool) -> Animation {
+        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? .easeOut(duration: 0.12) : (opening ? .notch : .notchClose)
     }
 }
 

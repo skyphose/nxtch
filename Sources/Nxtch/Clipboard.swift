@@ -41,6 +41,9 @@ final class ClipboardStore: ObservableObject {
     @Published var selection = 0
     /// Set briefly after copying, for the check mark.
     @Published private(set) var justCopied: UUID?
+    /// Select mode: rows show a check box, and a click picks a row instead of copying it.
+    @Published var selecting = false { didSet { if !selecting { picked = [] } } }
+    @Published private(set) var picked: Set<UUID> = []
 
     var enabled = true
     /// The app that was frontmost when the notch opened: where Return pastes to.
@@ -151,7 +154,21 @@ final class ClipboardStore: ObservableObject {
         save()
     }
 
+    func togglePick(_ item: ClipItem) {
+        selecting = true
+        if picked.remove(item.id) == nil { picked.insert(item.id) }
+    }
+
+    /// Deletes the picked entries, pinned ones included: picking one is asking for it by name.
+    func deletePicked() {
+        items.filter { picked.contains($0.id) }.forEach(deleteImage)
+        items.removeAll { picked.contains($0.id) }
+        selecting = false
+        save()
+    }
+
     func delete(_ item: ClipItem) {
+        picked.remove(item.id)
         items.removeAll { $0.id == item.id }
         deleteImage(item)
         save()
@@ -159,6 +176,7 @@ final class ClipboardStore: ObservableObject {
 
     /// Clears everything except pinned items.
     func clear() {
+        selecting = false
         items.filter { !$0.pinned }.forEach(deleteImage)
         items.removeAll { !$0.pinned }
         save()

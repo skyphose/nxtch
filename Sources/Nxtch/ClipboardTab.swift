@@ -22,6 +22,9 @@ struct ClipboardTab: View {
                     }
                     .onKeyPress(.downArrow) { store.moveSelection(1); return .handled }
                     .onKeyPress(.upArrow) { store.moveSelection(-1); return .handled }
+                if store.selecting {
+                    Text("\(store.picked.count) selected").font(.system(size: 10, weight: .medium).monospacedDigit()).foregroundStyle(.secondary)
+                }
                 if !enabled { Text("Paused").font(.system(size: 10, weight: .semibold)).foregroundStyle(.orange) }
             }
             .padding(.horizontal, 8)
@@ -36,7 +39,7 @@ struct ClipboardTab: View {
             } else {
                 ScrollViewReader { proxy in
                     ScrollView(.vertical, showsIndicators: false) {
-                        VStack(spacing: 1) {
+                        LazyVStack(spacing: 1) {   // up to 100 rows, 6 visible
                             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                                 ClipRow(item: item, store: store, selected: index == store.selection).id(item.id)
                             }
@@ -62,6 +65,11 @@ private struct ClipRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
+            if store.selecting {
+                Image(systemName: picked ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 14))
+                    .foregroundStyle(picked ? Color.accentColor : .white.opacity(0.35))
+            }
             leading.frame(width: 22, height: 22)
             if item.kind == .image, let img = store.thumbnail(for: item) {
                 Image(nsImage: img).resizable().aspectRatio(contentMode: .fit)
@@ -81,17 +89,25 @@ private struct ClipRow: View {
         .foregroundStyle(.white)
         .padding(.horizontal, 8)
         .frame(height: NotchViewModel.clipRowHeight)
-        .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(selected ? .white.opacity(0.12) : .clear))
+        .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
+            .fill(picked ? Color.accentColor.opacity(0.28) : selected && !store.selecting ? .white.opacity(0.12) : .clear))
         .contentShape(Rectangle())
-        .onTapGesture { store.copy(item) }
+        // In select mode a click picks the row. ⌘-click starts select mode from anywhere.
+        .onTapGesture {
+            if store.selecting || NSEvent.modifierFlags.contains(.command) { store.togglePick(item) } else { store.copy(item) }
+        }
+        .animation(.easeOut(duration: 0.12), value: picked)
         .contextMenu {
             Button("Paste") { store.paste(item) }
             Button("Copy") { store.copy(item) }
             Button(item.pinned ? "Unpin" : "Pin") { store.togglePin(item) }
             Divider()
+            Button(picked ? "Deselect" : "Select") { store.togglePick(item) }
             Button("Delete") { store.delete(item) }
         }
     }
+
+    private var picked: Bool { store.picked.contains(item.id) }
 
     @ViewBuilder private var leading: some View {
         if let icon = Self.icon(item.sourceBundleID) {

@@ -83,6 +83,7 @@ the shelf MOVES files. it doesnt copy them. dropping a file on the notch only no
 press ⌃⌥V anywhere and type to search. ↑/↓ moves the selection, return pastes into the app you were in.
 
 - click a row to copy it. right-click to paste, pin or delete.
+- to delete some entries and keep the rest, click the check mark button, pick the rows, then the trash. ⌘-click a row does the same without the button. the trash deletes what you picked, pinned or not. outside select mode it clears everything unpinned.
 - anything a password manager marks as concealed or transient is never recroded. nothing is recorded while a password manager is the frontmost app either, since not all of them mark their items. the list is in `Clipboard.swift`. four of the ids on it (macpass, strongbox, keeper, nordpass) i wrote down without an install to check against.
 - a password copied from a browser extension or a terminal looks like any other text, so that still gets recorded. delete it, or pause recording first.
 - unpinned items are dropped after 7 days.
