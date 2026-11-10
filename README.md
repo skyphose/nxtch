@@ -11,9 +11,7 @@ i wanted four small things on my mac: a volume knob per app, a place to park a f
 | a shelf | drop anything on the notch, drag it out and the original moves there | conversion, renaming, sync |
 | clipboard history | text, images and files. ⌃⌥V to search, return to paste | rich text, snippets, sync |
 
-all of it is one app: a 1.3 MB binary, one process, apple frameworks only, no network. with the notch closed and nothing playing it uses 0.1 - 0.4% cpu and about 14 MB of memory. with audio playing, 1.1 - 1.5%. those are from my macbook. the rest of the numbers, and the limits a change has to stay under, are in [SCOPE.md](SCOPE.md).
-
-boring.notch was the inspiration, and it does a lot more. nxtch stays at these four on purpose. the name is "no notch" with the o knocked out.
+all of it is one app: a 1.3 MB binary, one process, apple frameworks only, no network. with the notch closed and nothing playing it uses 0.1 - 0.4% cpu and about 14 MB of memory. with audio playing, 1.1 - 1.5%. those are from my macbook.
 
 ## before you install
 

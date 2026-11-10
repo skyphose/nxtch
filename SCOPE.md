@@ -51,6 +51,7 @@ hard limits. a change that breaks one doesnt ship.
 - widgets: calendar, weather, battery, reminders, timers, system stats.
 - a camera mirror, hud rpelacements (volume and brightness overlays), lock-screen stuff.
 - album art. it needs either unsigned code loaded into a system program or downloads from each service.
+- play/pause per app. i tried it: macos sends media commands to whichever app is now playing, even when the command names a different one.
 - lyrics, visualizer skins, themes, custom layouts.
 - cloud or sync of any kind. sharing beyond airdrop.
 - clipboard: rich text or html beyond plain text, snippets, templates, ocr, editing items.
