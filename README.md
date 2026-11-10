@@ -28,14 +28,14 @@ all four live in one app: a 1.3 MB binary, one process, apple frameworks only, n
 - you need rich text out of your clipboard history. it keeps plain text, images and file reefrences.
 - you copy passwords out of a browser extension or a terminal. those look like any other text, so they sit in the clipboard history for up to 7 days unless you delete them.
 - you dont want an app that leans on private api. now playing uses apple's `MediaRemote` framework through `osascript`, and a future macos can break it.
-- you wont click past apple's warning. i dont pay for apple's developer program, so the download isnt notarized and macos makes you allow it once. building it yourself skips that.
+- you wont click past apple's warning. macos makes you allow the download once. building it yourself skips that.
 
 ## install
 
 download the zip from the [latest release](https://github.com/skyphose/nxtch/releases/latest), then:
 
 1. unzip it (safari does that by itself) and drag `Nxtch.app` into Applications.
-2. open it. macos says it cant verify nxtch, since apple hasnt notarized it. click done.
+2. open it. macos says it cant verify nxtch. click done.
 3. in system settings > privacy & security, scroll down and click "open anyway" next to nxtch, then confirm. once per download.
 
 github builds that zip from the tagged source, not my laptop. the steps are in `.github/workflows/release.yml`. to check a zip came from there, with the [github cli](https://cli.github.com):
