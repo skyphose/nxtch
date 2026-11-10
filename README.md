@@ -59,6 +59,7 @@ whats playing (title, artist, progress, the app its in) with previous, play/paus
 drag anything onto the notch to park it: files, images, links, text. items are tmeporary. drag one out and drop it somewhere, and it leaves the shelf.
 
 - **the shelf moves files, it doesnt copy them.** dropping a file on the notch only notes where it is. drag it out into a finder folder and the original moves there from wherever it was. nothing is duplicated, on the shelf or after.
+- click a tile to select it. ⌘-click adds or removes one, ⇧-click selects a range. drag any selected tile and they all go together. the check mark button selects everything. the buttons and the right-click menu act on the selection.
 - hold ⌥ while dropping to copy and leave the original in place. hold ⌘ to insist on a move.
 - the destination does the move, not nxtch. so finder copies instead when the folder is on another disk, and an app that only reads the file (a browser upload, a mail attachment) leaves the original alone.
 - text, links, images and file promises (mail, photos, screenshots) get saved in `~/Library/Application Support/nxtch/Shelf`. those move out, so no copy is left behind. if the place you drop one only takes its path instead of moving or copying it, it stays on the shelf.

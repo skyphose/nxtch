@@ -25,13 +25,16 @@ struct ShelfTab: View {
                         ForEach(shelf.items) { item in ShelfTile(item: item, shelf: shelf) }
                     }
                     .padding(.vertical, 8)
+                    .frame(maxHeight: .infinity)
+                    .contentShape(Rectangle())
+                    .onTapGesture { shelf.clearSelection() }   // a click beside the tiles
                 }
-                if shelf.draggingItemID != nil {
+                if shelf.isDragging {
                     DeleteZone(shelf: shelf)
                         .transition(.scale(scale: 0.6).combined(with: .opacity))
                 }
             }
-            .animation(.spring(response: 0.3, dampingFraction: 0.75), value: shelf.draggingItemID != nil)
+            .animation(.spring(response: 0.3, dampingFraction: 0.75), value: shelf.isDragging)
         }
     }
 }
@@ -69,6 +72,7 @@ private struct DeleteZone: View {
 private struct ShelfTile: View {
     let item: ShelfItem
     @ObservedObject var shelf: ShelfStore
+    private var selected: Bool { shelf.selection.contains(item.id) }
 
     var body: some View {
         VStack(spacing: 5) {
@@ -89,7 +93,10 @@ private struct ShelfTile: View {
         }
         .foregroundStyle(.white)
         .padding(6)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.white.opacity(0.06)))
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(selected ? Color.accentColor.opacity(0.35) : .white.opacity(0.06)))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .strokeBorder(Color.accentColor.opacity(selected ? 0.9 : 0), lineWidth: 1.5))
         .contentShape(Rectangle())
         // AppKit drag source + click/menu handling, so we learn whether a drag out succeeded.
         .overlay(ShelfDragSource(item: item, shelf: shelf))
@@ -119,25 +126,44 @@ final class ShelfDragSourceView: NSView, NSDraggingSource {
     var item: ShelfItem!
     weak var shelf: ShelfStore?
     private var mouseDownEvent: NSEvent?
+    /// A plain click on an already selected tile narrows the selection to it, but only on mouse
+    /// up: on mouse down it may be the start of dragging the whole selection.
+    private var narrowOnMouseUp = false
+    private var dragged: [ShelfItem] = []
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func mouseDown(with event: NSEvent) {
+        guard let shelf else { return }
         mouseDownEvent = event
-        if event.clickCount == 2 { shelf?.open(item) }
+        narrowOnMouseUp = false
+        let flags = event.modifierFlags
+        if flags.contains(.command) { shelf.select(item, toggle: true) }
+        else if flags.contains(.shift) { shelf.select(item, extend: true) }
+        else if shelf.selection.contains(item.id) { narrowOnMouseUp = true }
+        else { shelf.select(item) }
+        if event.clickCount == 2 { shelf.open(item) }
     }
 
-    override func mouseUp(with event: NSEvent) { mouseDownEvent = nil }
+    override func mouseUp(with event: NSEvent) {
+        if narrowOnMouseUp, mouseDownEvent != nil { shelf?.select(item) }
+        mouseDownEvent = nil
+    }
 
     override func mouseDragged(with event: NSEvent) {
         guard let down = mouseDownEvent, let shelf else { return }
         mouseDownEvent = nil
-        let dragItem = NSDraggingItem(pasteboardWriter: item.url as NSURL)
-        let image = shelf.thumbnails[item.id] ?? NSWorkspace.shared.icon(forFile: item.path)
+        dragged = shelf.group(of: item)
         let p = convert(down.locationInWindow, from: nil)
-        dragItem.setDraggingFrame(NSRect(x: p.x - 24, y: p.y - 24, width: 48, height: 48), contents: image)
-        shelf.beginDrag(item)
-        beginDraggingSession(with: [dragItem], event: down, source: self)
+        let dragItems = dragged.enumerated().map { i, it in
+            let d = NSDraggingItem(pasteboardWriter: it.url as NSURL)
+            let image = shelf.thumbnails[it.id] ?? NSWorkspace.shared.icon(forFile: it.path)
+            let o = CGFloat(min(i, 4)) * 6   // fan the pile out a little
+            d.setDraggingFrame(NSRect(x: p.x - 24 + o, y: p.y - 24 - o, width: 48, height: 48), contents: image)
+            return d
+        }
+        shelf.beginDrag(dragged)
+        beginDraggingSession(with: dragItems, event: down, source: self)
     }
 
     func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
@@ -153,16 +179,21 @@ final class ShelfDragSourceView: NSView, NSDraggingSource {
     }
 
     func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
-        shelf?.finishDrag(item, operation: operation)
+        shelf?.finishDrag(dragged, operation: operation)
+        dragged = []
     }
 
     override func menu(for event: NSEvent) -> NSMenu? {
         guard let shelf, let item else { return nil }
+        // Right-clicking outside the selection acts on that tile alone, as in Finder.
+        if !shelf.selection.contains(item.id) { shelf.select(item) }
+        let group = shelf.group(of: item)
         let menu = NSMenu()
         let entries: [(String, () -> Void)] = [
-            ("Open", { shelf.open(item) }), ("Show in Finder", { shelf.reveal(item) }),
-            ("Copy", { shelf.copyToClipboard([item]) }), ("AirDrop…", { shelf.airDrop([item]) }), ("", {}),
-            ("Delete", { shelf.remove(item) }),
+            ("Open", { group.forEach(shelf.open) }),
+            ("Show in Finder", { NSWorkspace.shared.activateFileViewerSelecting(group.map(\.url)) }),
+            ("Copy", { shelf.copyToClipboard(group) }), ("AirDrop…", { shelf.airDrop(group) }), ("", {}),
+            ("Delete", { group.forEach(shelf.remove) }),
         ]
         for (title, action) in entries {
             menu.addItem(title.isEmpty ? .separator() : ClosureMenuItem(title: title, action: action))

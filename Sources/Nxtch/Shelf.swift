@@ -61,8 +61,13 @@ struct ShelfItem: Identifiable, Codable, Equatable {
 final class ShelfStore: ObservableObject {
     @Published private(set) var items: [ShelfItem] = []
     @Published private(set) var thumbnails: [UUID: NSImage] = [:]
-    /// The item being dragged out of the shelf (shows the Delete zone).
-    @Published private(set) var draggingItemID: UUID?
+    /// Selected tiles. Click selects one, ⌘-click adds or removes one, ⇧-click selects a range.
+    @Published private(set) var selection: Set<UUID> = []
+    /// Where a ⇧-click range starts.
+    private var anchor: UUID?
+    /// The items being dragged out of the shelf (shows the Delete zone).
+    @Published private(set) var dragging: Set<UUID> = []
+    var isDragging: Bool { !dragging.isEmpty }
     /// The current drag out ended on nxtch itself (shelf or Delete zone), not somewhere else.
     private var droppedInternally = false
 
@@ -95,6 +100,7 @@ final class ShelfStore: ObservableObject {
     private func remove(_ item: ShelfItem, deleteFile: Bool) {
         items.removeAll { $0.id == item.id }
         thumbnails[item.id] = nil
+        selection.remove(item.id)
         if deleteFile { deleteOwned(item) }
         save()
     }
@@ -114,17 +120,49 @@ final class ShelfStore: ObservableObject {
         for f in files where !kept.contains(f.standardizedFileURL.path) { try? FileManager.default.removeItem(at: f) }
     }
 
-    func clear() { items.forEach(remove) }
+    /// What the header buttons and a tile's menu act on: the selection, or everything without one.
+    var actionItems: [ShelfItem] { selection.isEmpty ? items : items.filter { selection.contains($0.id) } }
+
+    /// The items a click, drag or menu on `item` applies to: the whole selection when `item` is
+    /// part of it, otherwise just `item`.
+    func group(of item: ShelfItem) -> [ShelfItem] {
+        selection.contains(item.id) ? items.filter { selection.contains($0.id) } : [item]
+    }
+
+    func clear() { actionItems.forEach(remove) }
+
+    // MARK: Selection
+
+    func select(_ item: ShelfItem, toggle: Bool = false, extend: Bool = false) {
+        if extend, let a = items.firstIndex(where: { $0.id == anchor }), let b = items.firstIndex(where: { $0.id == item.id }) {
+            selection = Set(items[min(a, b)...max(a, b)].map(\.id))
+            return
+        }
+        if toggle {
+            if selection.remove(item.id) == nil { selection.insert(item.id) }
+        } else {
+            selection = [item.id]
+        }
+        anchor = item.id
+    }
+
+    func clearSelection() { selection = []; anchor = nil }
+
+    var allSelected: Bool { !items.isEmpty && selection.count == items.count }
+
+    /// The check mark button: selects everything, or clears the selection when everything already is.
+    func toggleSelectAll() {
+        if allSelected { clearSelection() } else { selection = Set(items.map(\.id)); anchor = items.first?.id }
+    }
 
     /// Drops items whose files were moved or deleted elsewhere.
     func prune() {
         let before = items.count
         items.removeAll { !FileManager.default.fileExists(atPath: $0.path) }
-        if items.count != before { save() }
+        if items.count != before { selection.formIntersection(items.map(\.id)); save() }
     }
 
     func open(_ item: ShelfItem) { NSWorkspace.shared.open(item.url) }
-    func reveal(_ item: ShelfItem) { NSWorkspace.shared.activateFileViewerSelecting([item.url]) }
 
     /// Puts the files on the clipboard: paste in Finder to copy them, ⌥⌘V to move them.
     func copyToClipboard(_ items: [ShelfItem]? = nil) {
@@ -138,12 +176,16 @@ final class ShelfStore: ObservableObject {
 
     // MARK: Dragging out
 
-    func beginDrag(_ item: ShelfItem) { draggingItemID = item.id }
+    func beginDrag(_ dragged: [ShelfItem]) { dragging = Set(dragged.map(\.id)) }
 
-    /// Shelf items are temporary: a successful drop anywhere else takes the item off the shelf.
-    func finishDrag(_ item: ShelfItem, operation: NSDragOperation) {
-        defer { draggingItemID = nil; droppedInternally = false }
-        guard !droppedInternally, !operation.isEmpty, items.contains(where: { $0.id == item.id }) else { return }
+    /// Shelf items are temporary: a successful drop anywhere else takes them off the shelf.
+    func finishDrag(_ dragged: [ShelfItem], operation: NSDragOperation) {
+        defer { dragging = []; droppedInternally = false }
+        guard !droppedInternally, !operation.isEmpty else { return }
+        for item in dragged where items.contains(where: { $0.id == item.id }) { release(item, operation: operation) }
+    }
+
+    private func release(_ item: ShelfItem, operation: NSDragOperation) {
         // nxtch's own copy is deleted with the item, so only let go of it when the destination
         // said it moved or copied the file. A drop that just took the path keeps it on the shelf.
         if item.owned, operation.isDisjoint(with: [.move, .copy]) {
@@ -165,9 +207,10 @@ final class ShelfStore: ObservableObject {
     /// A drop on the Delete zone. The only thing that can be dragged there is a shelf item.
     func deleteDragged() -> Bool {
         droppedInternally = true
-        guard let item = items.first(where: { $0.id == draggingItemID }) else { return false }
-        Log.shelf.info("deleted via drop zone")
-        remove(item)
+        let doomed = items.filter { dragging.contains($0.id) }
+        guard !doomed.isEmpty else { return false }
+        Log.shelf.info("deleted via drop zone count=\(doomed.count, privacy: .public)")
+        doomed.forEach(remove)
         return true
     }
 
@@ -177,7 +220,7 @@ final class ShelfStore: ObservableObject {
     /// file promises are saved into nxtch's storage.
     func handleDrop(_ providers: [NSItemProvider]) -> Bool {
         // A shelf item dropped back onto the notch: nothing to add, and it stays on the shelf.
-        if draggingItemID != nil { droppedInternally = true; return false }
+        if isDragging { droppedInternally = true; return false }
         Log.shelf.info("drop providers=\(providers.count, privacy: .public)")
         providers.forEach(ingest)
         return !providers.isEmpty

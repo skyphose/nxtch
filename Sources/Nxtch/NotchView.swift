@@ -180,8 +180,10 @@ private struct OpenContent: View {
         case .media: EmptyView()
         case .shelf:
             if !shelf.isEmpty {
-                iconButton("square.and.arrow.up", "AirDrop") { shelf.airDrop() }
-                iconButton("doc.on.doc", "Copy") { shelf.copyToClipboard() }
+                iconButton(shelf.allSelected ? "checkmark.circle.fill" : "checkmark.circle",
+                           shelf.allSelected ? "Deselect All" : "Select All") { shelf.toggleSelectAll() }
+                iconButton("square.and.arrow.up", "AirDrop") { shelf.airDrop(shelf.actionItems) }
+                iconButton("doc.on.doc", "Copy") { shelf.copyToClipboard(shelf.actionItems) }
                 iconButton("trash", "Clear") { shelf.clear() }
             }
         case .clipboard:

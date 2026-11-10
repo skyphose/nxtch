@@ -26,7 +26,8 @@ hard limits. a change that breaks one doesnt ship.
 
 - drop anything on the notch. files are referenced. text, links, images and file promises are saved.
 - items are temporary. a successful drag out takes them off the shelf, and moves the original file to where you dropped it (⌥ copies instead). a delete zone shows up while you drag.
-- open, show in finder, copy all, airdrop all, delete, clear.
+- select one or several (⌘-click, ⇧-click, or the select-all check mark) and drag them out together.
+- open, show in finder, copy, airdrop, delete, clear. they act on the selection, or on everything without one.
 - survives a relaunch. files that disappear drop off the shelf.
 
 ### clipboard
@@ -50,7 +51,7 @@ hard limits. a change that breaks one doesnt ship.
 - lyrics, visualizer skins, themes, custom layouts.
 - cloud or sync of any kind. sharing beyond airdrop.
 - clipboard: rich text or html beyond plain text, snippets, templates, ocr, editing items.
-- shelf: file conversion, compression, renaming, multi-select.
+- shelf: file conversion, compression, renaming.
 - mixer: eq, effects, per-app output routing, recording audio.
 - plugins or extension points.
 - more than one display at a time. nxtch lives on the notch screen.
