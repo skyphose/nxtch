@@ -40,9 +40,9 @@ struct ShelfTab: View {
 /// Appears while you drag an item out of the shelf: drop on it to delete the item.
 private struct DeleteZone: View {
     @ObservedObject var shelf: ShelfStore
+    @State private var hot = false
 
     var body: some View {
-        let hot = shelf.deleteTargeted
         VStack(spacing: 6) {
             Image(systemName: hot ? "trash.fill" : "trash").font(.system(size: 26, weight: .semibold))
             Text("Delete").font(.system(size: 12, weight: .semibold))
@@ -61,7 +61,7 @@ private struct DeleteZone: View {
         .scaleEffect(hot ? 1.05 : 1)
         .animation(.spring(response: 0.25, dampingFraction: 0.6), value: hot)
         .padding(.vertical, 8)
-        .onDrop(of: [.fileURL], isTargeted: Binding(get: { shelf.deleteTargeted }, set: { shelf.deleteTargeted = $0 })) { _ in
+        .onDrop(of: [.fileURL], isTargeted: $hot) { _ in
             shelf.deleteDragged()
         }
         .help("Drop here to delete from the shelf (original files are never trashed)")

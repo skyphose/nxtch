@@ -37,6 +37,7 @@ struct NotchView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var shelf: ShelfStore
     @ObservedObject var clipboard: ClipboardStore
+    @State private var dropTargeted = false
 
     private var topRadius: CGFloat { vm.isOpen ? 19 : 6 }
     private var bottomRadius: CGFloat { vm.isOpen ? 24 : 12 }
@@ -63,13 +64,13 @@ struct NotchView: View {
             .background(Color.black)
             .clipShape(NotchShape(topRadius: topRadius, bottomRadius: bottomRadius))
             .overlay {
-                if vm.isDropTargeted {
+                if dropTargeted {
                     NotchShape(topRadius: topRadius, bottomRadius: bottomRadius)
                         .stroke(Color.accentColor, lineWidth: 2)
                 }
             }
             .shadow(color: vm.isOpen ? .black.opacity(0.6) : .clear, radius: 8)
-            .onDrop(of: [.item], isTargeted: Binding(get: { vm.isDropTargeted }, set: { vm.isDropTargeted = $0 })) { providers in
+            .onDrop(of: [.item], isTargeted: $dropTargeted) { providers in
                 vm.tab = .shelf
                 return shelf.handleDrop(providers)
             }

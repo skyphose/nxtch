@@ -63,7 +63,6 @@ final class ShelfStore: ObservableObject {
     @Published private(set) var thumbnails: [UUID: NSImage] = [:]
     /// The item being dragged out of the shelf (shows the Delete zone).
     @Published private(set) var draggingItemID: UUID?
-    @Published var deleteTargeted = false
     /// The current drag out ended on nxtch itself (shelf or Delete zone), not somewhere else.
     private var droppedInternally = false
 
@@ -126,7 +125,7 @@ final class ShelfStore: ObservableObject {
 
     /// Shelf items are temporary: a successful drop anywhere else takes the item off the shelf.
     func finishDrag(_ item: ShelfItem, operation: NSDragOperation) {
-        defer { draggingItemID = nil; deleteTargeted = false; droppedInternally = false }
+        defer { draggingItemID = nil; droppedInternally = false }
         guard !droppedInternally, !operation.isEmpty, items.contains(where: { $0.id == item.id }) else { return }
         Log.shelf.info("dragged out op=\(operation.rawValue, privacy: .public); removed from shelf")
         remove(item)

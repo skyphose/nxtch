@@ -61,7 +61,6 @@ enum NotchTab: String, CaseIterable {
 final class NotchViewModel: ObservableObject {
     @Published var isOpen = false
     @Published var geometry: NotchGeometry
-    @Published var isDropTargeted = false
     @Published var tab: NotchTab {
         didSet { UserDefaults.standard.set(tab.rawValue, forKey: "tab") }
     }
@@ -369,7 +368,6 @@ final class NotchController {
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
         } else {
             pinnedOpen = false
-            vm.isDropTargeted = false
             // Hand keyboard focus back to the app you were using.
             if panel.isKeyWindow {
                 panel.orderOut(nil)

@@ -8,7 +8,7 @@ the name is "no notch" with the o knocked out.
 
 - macos 14.2 or later. process taps arrived in 14.2. ive only run it on macos 27.2, on one m-series macbook pro. 14.2 is the floor on paper, not something i tested.
 - a mac with a notch. on other displays it falls back to a small pill at the top center. untested, i dont have one.
-- the xcode command line tools. full xcode isnt needed.
+- full xcode. the command line tools alone cant build it anymore: swiftpm and swiftui's `@State` macro dont work there on recent sdks.
 
 ## who its not for
 
@@ -56,7 +56,9 @@ press ⌃⌥V anywhere and type to search. ↑/↓ moves the selection, return p
 ./build.sh --install  # builds, copies to /Applications and launches from there
 ```
 
-`build.sh` calls `swiftc` directly, not `swift build`. swiftpm is broken in some command line tools installs. `Package.swift` is there for editors. the code also avoids swiftui's `@State`: on recent sdks its a macro that needs a compiler plugin the command line tools dont ship.
+`build.sh` runs `swift build` and wraps the binary into an app.
+
+it signs with your apple development certificate if you have a valid one, so macos keeps the audio and accessibility grants across rebuilds. without one it signs ad hoc, and macos asks again after every build. set `SIGN_ID` to pick a specific identity.
 
 ## permissions
 
@@ -65,7 +67,7 @@ press ⌃⌥V anywhere and type to search. ↑/↓ moves the selection, return p
 | system audio recording | the first time an app plays sound | per-app volume and the meters read each app's audio |
 | accessibility | the first time you paste from clipboard history | return/paste sends ⌘V to the app you were in |
 
-the app is signed ad hoc, so macos may ask again after every rebuild. return only pastes if the app you were in is frontmost again. otherwise the item just stays on the clipboard.
+with an ad hoc signature macos may ask again after every rebuild. signing with your own certificate stops that (see build). return only pastes if the app you were in is frontmost again. otherwise the item just stays on the clipboard.
 
 ## how it works
 

@@ -6,12 +6,22 @@ import SwiftUI
 struct ClipboardTab: View {
     @ObservedObject var store: ClipboardStore
     let enabled: Bool
+    @FocusState private var searchFocused: Bool
 
     var body: some View {
         VStack(spacing: 4) {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(.secondary)
-                SearchField(store: store)
+                TextField("", text: $store.query, prompt: Text("Search clipboard  ·  ⌃⌥V").foregroundStyle(.white.opacity(0.35)))
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12))
+                    .focused($searchFocused)
+                    .onSubmit {
+                        let items = store.visible
+                        if store.selection < items.count { store.paste(items[store.selection]) }
+                    }
+                    .onKeyPress(.downArrow) { store.moveSelection(1); return .handled }
+                    .onKeyPress(.upArrow) { store.moveSelection(-1); return .handled }
                 if !enabled { Text("Paused").font(.system(size: 10, weight: .semibold)).foregroundStyle(.orange) }
             }
             .padding(.horizontal, 8)
@@ -37,6 +47,8 @@ struct ClipboardTab: View {
             }
         }
         .padding(.top, 2)
+        // ⌃⌥V makes the panel key; put the cursor in the search field.
+        .onReceive(NotificationCenter.default.publisher(for: .nxtchFocusSearch)) { _ in searchFocused = true }
     }
 }
 
@@ -98,62 +110,5 @@ private struct ClipRow: View {
         icon.size = NSSize(width: 22, height: 22)
         icons[id] = icon
         return icon
-    }
-}
-
-/// An AppKit text field, so focus and arrow / Return / Esc handling are under our control.
-private struct SearchField: NSViewRepresentable {
-    @ObservedObject var store: ClipboardStore
-
-    func makeNSView(context: Context) -> NSTextField {
-        let f = NSTextField()
-        f.isBordered = false
-        f.drawsBackground = false
-        f.focusRingType = .none
-        f.font = .systemFont(ofSize: 12)
-        f.textColor = .white
-        f.placeholderAttributedString = NSAttributedString(string: "Search clipboard  ·  ⌃⌥V", attributes: [
-            .foregroundColor: NSColor.white.withAlphaComponent(0.35), .font: NSFont.systemFont(ofSize: 12)])
-        f.delegate = context.coordinator
-        context.coordinator.field = f
-        return f
-    }
-
-    func updateNSView(_ f: NSTextField, context: Context) {
-        if f.stringValue != store.query { f.stringValue = store.query }
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator(store: store) }
-
-    @MainActor
-    final class Coordinator: NSObject, NSTextFieldDelegate {
-        let store: ClipboardStore
-        weak var field: NSTextField?
-        private var observer: Any?
-
-        init(store: ClipboardStore) {
-            self.store = store
-            super.init()
-            // ⌃⌥V makes the panel key; put the cursor in the search field.
-            observer = NotificationCenter.default.addObserver(forName: .nxtchFocusSearch, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { if let f = self?.field { f.window?.makeFirstResponder(f) } }
-            }
-        }
-
-        func controlTextDidChange(_ note: Notification) { store.query = field?.stringValue ?? "" }
-
-        func control(_ control: NSControl, textView: NSTextView, doCommandBy sel: Selector) -> Bool {
-            switch sel {
-            case #selector(NSResponder.moveDown(_:)): store.moveSelection(1)
-            case #selector(NSResponder.moveUp(_:)): store.moveSelection(-1)
-            case #selector(NSResponder.insertNewline(_:)):
-                let items = store.visible
-                if store.selection < items.count { store.paste(items[store.selection]) }
-            case #selector(NSResponder.cancelOperation(_:)):
-                if store.query.isEmpty { NotificationCenter.default.post(name: .nxtchRequestClose, object: nil) } else { store.query = "" }
-            default: return false
-            }
-            return true
-        }
     }
 }

@@ -10,7 +10,7 @@ hard limits. a change that breaks one doesnt ship.
 | --- | --- |
 | idle cpu, notch closed | about 0% with nothing playing. 2% max while an app is playing (closed-notch meter on) |
 | memory | under 80 MB resident with a full clipboard history |
-| dependencies | none. apple frameworks only, one binary, built with `swiftc` |
+| dependencies | none. apple frameworks only, one binary, built with `swift build` |
 | helpers | one (`osascript` for now playing), and it quits when nxtch quits |
 | network | none. no accounts, sync, analytics, crash reporting or auto-update |
 | permissions | only when a feature is used. audio capture, and accessibility only for paste from history |
