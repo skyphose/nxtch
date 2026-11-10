@@ -60,6 +60,7 @@ enum NotchTab: String, CaseIterable {
 @MainActor
 final class NotchViewModel: ObservableObject {
     @Published var isOpen = false
+    @Published var isDropTargeted = false
     @Published var geometry: NotchGeometry
     @Published var tab: NotchTab {
         didSet { UserDefaults.standard.set(tab.rawValue, forKey: "tab") }
@@ -71,7 +72,17 @@ final class NotchViewModel: ObservableObject {
     static let maxMixerRows = 4
     static let nowPlayingHeight: CGFloat = 76
     static let sectionLabelHeight: CGFloat = 22
-    static let shelfHeight: CGFloat = 116
+    /// Shelf tiles: 4 a row leaves room for the Delete zone beside them while you drag. The shelf
+    /// grows a row at a time, up to 3, then scrolls.
+    static let shelfColumns = 4
+    static let shelfMaxRows = 3
+    static let shelfTileSize = CGSize(width: 90, height: 97)
+    static let shelfSpacing: CGFloat = 6
+
+    static func shelfHeight(items: Int) -> CGFloat {
+        let rows = CGFloat(min(max(1, (items + shelfColumns - 1) / shelfColumns), shelfMaxRows))
+        return 16 + rows * shelfTileSize.height + (rows - 1) * shelfSpacing + 3
+    }
     static let clipRowHeight: CGFloat = 32
     static let clipVisibleRows = 6
 
@@ -93,14 +104,14 @@ final class NotchViewModel: ObservableObject {
         CGSize(width: geometry.notchSize.width + leftEar + rightEar, height: geometry.notchSize.height)
     }
 
-    func openSize(rows: Int, nowPlaying: Bool) -> CGSize {
+    func openSize(rows: Int, nowPlaying: Bool, shelfItems: Int) -> CGSize {
         let body: CGFloat
         switch tab {
         case .media:
             body = (nowPlaying ? Self.nowPlayingHeight : 0) + Self.sectionLabelHeight
                 + CGFloat(max(1, min(rows, Self.maxMixerRows))) * Self.rowHeight
         case .shelf:
-            body = Self.shelfHeight
+            body = Self.shelfHeight(items: shelfItems)
         case .clipboard:
             body = 30 + CGFloat(Self.clipVisibleRows) * (Self.clipRowHeight + 1)
         }
@@ -217,6 +228,11 @@ final class NotchController {
             }
             return e
         }) { monitors.append(k) }
+        // A two-finger swipe sideways flips tabs.
+        if let s = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel, handler: { [weak self] e in
+            nonisolated(unsafe) let event = e   // monitors run on the main thread
+            return MainActor.assumeIsolated { self?.swipe(event) ?? false } ? nil : e
+        }) { monitors.append(s) }
 
         // Hover and drag detection: reading the cursor position is trivial, and unlike event
         // monitors it also works while another app's menu is open or during a drag.
@@ -273,7 +289,7 @@ final class NotchController {
     /// The visible black shape while open, in screen coordinates.
     private var openShapeRect: NSRect {
         let f = vm.geometry.screenFrame
-        let s = vm.openSize(rows: model.apps.count, nowPlaying: nowPlaying.info != nil)
+        let s = vm.openSize(rows: model.apps.count, nowPlaying: nowPlaying.info != nil, shelfItems: shelf.items.count)
         let w = s.width + 38 // + top flares
         return NSRect(x: f.midX - w / 2, y: f.maxY - s.height, width: w, height: s.height)
     }
@@ -360,6 +376,32 @@ final class NotchController {
         }
     }
 
+    // MARK: Swipe between tabs
+
+    private var swipeX: CGFloat = 0, swipeY: CGFloat = 0, swiped = false
+
+    /// Two fingers sideways on the open notch: left for the next tab, right for the previous one,
+    /// once per gesture. Mostly-vertical scrolling is left to the lists. Returns whether it took
+    /// the event.
+    private func swipe(_ e: NSEvent) -> Bool {
+        guard vm.isOpen, e.window === panel, e.hasPreciseScrollingDeltas else { return false }
+        if e.phase == .began { swipeX = 0; swipeY = 0; swiped = false }
+        if swiped { return true }   // the rest of this gesture, momentum included
+        guard e.phase == .began || e.phase == .changed else { return false }
+        swipeX += e.scrollingDeltaX
+        swipeY += e.scrollingDeltaY
+        guard abs(swipeX) > 40, abs(swipeX) > 2 * abs(swipeY) else { return false }
+        swiped = true
+        // With natural scrolling the deltas follow the fingers; without it they are reversed.
+        let fingersLeft = (e.isDirectionInvertedFromDevice ? swipeX : -swipeX) < 0
+        let tabs = NotchTab.allCases
+        let next = (tabs.firstIndex(of: vm.tab) ?? 0) + (fingersLeft ? 1 : -1)
+        guard tabs.indices.contains(next) else { return true }
+        vm.tab = tabs[next]
+        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+        return true
+    }
+
     private func clickedOutside() {
         guard vm.isOpen, !menuTracking, !hits(openShapeRect, NSEvent.mouseLocation) else { return }
         setOpen(false)
@@ -374,7 +416,19 @@ final class NotchController {
         if !vm.isOpen { setOpen(true, reason: "hotkey") }
         // Take keyboard focus (without activating nxtch) so you can type to search right away.
         panel.makeKey()
-        DispatchQueue.main.async { NotificationCenter.default.post(name: .nxtchFocusSearch, object: nil) }
+        focusSearch()
+    }
+
+    /// Puts the cursor in the clipboard search field. SwiftUI can build the tab a moment after it
+    /// is picked, so this looks again for up to half a second.
+    private func focusSearch(tries: Int = 10) {
+        if let field = panel.contentView.flatMap(Self.textField) { panel.makeFirstResponder(field); return }
+        if tries > 0 { after(0.05) { [weak self] in self?.focusSearch(tries: tries - 1) } }
+    }
+
+    private static func textField(in view: NSView) -> NSTextField? {
+        if let field = view as? NSTextField, field.isEditable { return field }
+        return view.subviews.lazy.compactMap(textField).first
     }
 
     private func setOpen(_ open: Bool, reason: String = "") {
@@ -389,6 +443,7 @@ final class NotchController {
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
         } else {
             pinnedOpen = false
+            vm.isDropTargeted = false
             // Hand keyboard focus back to the app you were using.
             if panel.isKeyWindow {
                 panel.orderOut(nil)

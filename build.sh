@@ -9,6 +9,7 @@
 # every build. Set SIGN_ID to pick a specific identity.
 set -euo pipefail
 cd "$(dirname "$0")"
+if [[ $EUID -eq 0 ]]; then echo "Run build.sh as yourself, not with sudo." >&2; exit 1; fi
 APP=Nxtch.app
 BUNDLE_ID=dev.nxtch.app
 
@@ -36,10 +37,11 @@ if [[ " $* " == *" --uninstall "* ]]; then
   exit 0
 fi
 
-# SWIFT_BUILD_FLAGS: extra flags for swift build (homebrew passes --disable-sandbox).
-swift build -c release ${=SWIFT_BUILD_FLAGS:-}
-rm -rf "$APP" && mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$(swift build -c release --show-bin-path)/Nxtch" "$APP/Contents/MacOS/Nxtch"
+# swiftc directly, not swift build: the free command line tools can compile nxtch this way, while
+# their swiftpm fails on recent macOS. So full Xcode is not needed. (swift test still uses swiftpm.)
+rm -rf "$APP" && mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" .build
+xcrun swiftc -O -wmo -module-name Nxtch -target "$(uname -m)-apple-macosx14.2" \
+  -module-cache-path .build/module-cache Sources/Nxtch/*.swift -o "$APP/Contents/MacOS/Nxtch"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
@@ -49,6 +51,8 @@ codesign --force --options runtime --sign "${SIGN_ID:--}" "$APP"
 echo "Built $(pwd)/$APP (signed: ${SIGN_ID:-ad hoc})"
 
 if [[ " $* " == *" --install "* ]]; then
+  # Only ever replace a real Nxtch.app, never whatever a symlink points at.
+  if [[ -L "/Applications/$APP" ]]; then echo "/Applications/$APP is a symlink. Not touching it." >&2; exit 1; fi
   pkill -x Nxtch 2>/dev/null && sleep 1 || true
   rm -rf "/Applications/$APP" && cp -R "$APP" /Applications/
   echo "Installed /Applications/$APP"

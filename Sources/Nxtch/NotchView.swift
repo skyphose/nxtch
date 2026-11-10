@@ -37,7 +37,6 @@ struct NotchView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var shelf: ShelfStore
     @ObservedObject var clipboard: ClipboardStore
-    @State private var dropTargeted = false
 
     private var topRadius: CGFloat { vm.isOpen ? 19 : 6 }
     private var bottomRadius: CGFloat { vm.isOpen ? 24 : 12 }
@@ -50,7 +49,7 @@ struct NotchView: View {
 
     var body: some View {
         let size = vm.isOpen
-            ? vm.openSize(rows: model.apps.count, nowPlaying: nowPlaying.info != nil)
+            ? vm.openSize(rows: model.apps.count, nowPlaying: nowPlaying.info != nil, shelfItems: shelf.items.count)
             : vm.closedSize(leftEar: leftEar, rightEar: rightEar)
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
@@ -69,13 +68,13 @@ struct NotchView: View {
             .background(Color.black)
             .clipShape(NotchShape(topRadius: topRadius, bottomRadius: bottomRadius))
             .overlay {
-                if dropTargeted {
+                if vm.isDropTargeted {
                     NotchShape(topRadius: topRadius, bottomRadius: bottomRadius)
                         .stroke(Color.accentColor, lineWidth: 2)
                 }
             }
             .shadow(color: vm.isOpen ? .black.opacity(0.6) : .clear, radius: 8)
-            .onDrop(of: [.item], isTargeted: $dropTargeted) { providers in
+            .onDrop(of: [.item], isTargeted: $vm.isDropTargeted) { providers in
                 vm.tab = .shelf
                 return shelf.handleDrop(providers)
             }
@@ -85,6 +84,7 @@ struct NotchView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .animation(.notch, value: leftEar + rightEar)
         .animation(.notch, value: model.apps.count)
+        .animation(.notch, value: shelf.items.count)
         .animation(.notch, value: nowPlaying.info != nil)
         .animation(.notch, value: vm.tab)
         .preferredColorScheme(.dark)

@@ -2,27 +2,35 @@
 
 <img src="Resources/icon.png" width="128" alt="nxtch icon">
 
-the macbook notch is a black bar that does nothing. nxtch makes it do three things: per-app volume and whats playing, a shelf for files, and clipboard history.
+i wanted four small things on my mac: a volume knob per app, a place to park a file mid-drag, clipboard history, and play/pause without hunting for the window. thats usually four separate menu bar apps, each running all day. the notch was already there doing nothing, so i put all four in it.
 
-the name is "no notch" with the o knocked out.
+| need | what nxtch does | what it leaves out |
+| --- | --- | --- |
+| per-app volume | 0 - 150% and mute for every app making sound, with a live meter | eq, effects, per-app output device |
+| whats playing | title, artist, progress, previous / play-pause / next | album art |
+| a shelf | drop anything on the notch, drag it out and the original moves there | conversion, renaming, sync |
+| clipboard history | text, images and files. ⌃⌥V to search, return to paste | rich text, snippets, sync |
+
+all of it is one app: a 1.3 MB binary, one process, apple frameworks only, no network. with the notch closed and nothing playing it uses 0.1 - 0.4% cpu and about 14 MB of memory. with audio playing, 1.1 - 1.5%. those are from my macbook. the rest of the numbers, and the limits a change has to stay under, are in [SCOPE.md](SCOPE.md).
+
+boring.notch was the inspiration, and it does a lot more. nxtch stays at these four on purpose. the name is "no notch" with the o knocked out.
 
 ## before you install
 
 - macos 14.2 or later. process taps arrived in 14.2. ive only run it on macos 27.2, on one m-series macbook pro. 14.2 is the floor on paper, not something i tested.
 - a mac with a notch. on other displays it falls back to a small pill at the top center. untested, i dont have one.
-- full xcode. the command line tools alone cant build it anymore: swiftpm and swiftui's `@State` macro dont work there on recent sdks.
+- apple's command line tools, about 2 GB. homebrew already needs them, and `xcode-select --install` gets them without it. full xcode isnt needed.
 
 ## who its not for
 
 - you want album art. theres none, on purpose. getting it means loading unsigned code into a system program or downloading it from each service. you get the app icon instead.
+- you want widgets: calendar, weather, battery, a camera mirror. boring.notch has those.
 - you live on an external display. nxtch sits on the notch screen only.
 - you need rich text out of your clipboard history. it keeps plain text, images and file references.
 - you copy passwords out of a browser extension or a terminal. those look like any other text, so they sit in the clipboard history for up to 7 days unless you delete them.
 - you dont want an app that leans on private api. now playing uses apple's `MediaRemote` framework through `osascript`, and a future macos can break it.
 
 ## install
-
-needs full xcode installed and opened once (it asks you to accept its license). nxtch is built from source on your mac either way. theres no download to trust.
 
 with homebrew:
 
@@ -36,16 +44,16 @@ or by hand:
 git clone https://github.com/skyphose/nxtch.git ~/nxtch && ~/nxtch/build.sh --install
 ```
 
-by hand copies it to /Applications and starts it. homebrew keeps it in its own folder, and `nxtch` starts it. since you built it yourself, gatekeeper has nothing to quarantine, so theres no "unidentified developer" warning.
+either way nxtch is built from source on your mac, in under a minute. theres no download to trust, and since you built it yourself, gatekeeper has nothing to quarantine. by hand copies it to /Applications and starts it. homebrew keeps it in its own folder, and `nxtch` starts it.
 
-ive only run either install on my own mac. the homebrew one i tested from a local copy of this repo, not from github.
+ive only run either install on my own mac. the homebrew one i tested from a local copy of this repo, not from github. the command line tools build i ran by pointing the build at them on a mac that also has xcode, not on a mac without it.
 
 | | by hand | homebrew |
 | --- | --- | --- |
 | update | `cd ~/nxtch && git pull && ./build.sh --install` | `brew upgrade nxtch` |
 | uninstall | `~/nxtch/build.sh --uninstall`, then delete `~/nxtch` | `nxtch --uninstall && brew uninstall nxtch` |
 | run without installing | `./build.sh --run` | |
-| an older version | `git checkout v0.3.0 && ./build.sh --install` | |
+| an older version | `git checkout v0.4.0 && ./build.sh --install` (0.4.0 and older need full xcode) | |
 
 uninstall quits nxtch, turns off launch at login, and removes the app, its settings and caches, the shelf and the clipboard history in `~/Library/Application Support/nxtch`, and its audio and accessibility permissions. nothing is kept back, so theres no undo. files you dropped on the shelf from elsewhere are only referenced, so those stay where they were.
 
@@ -53,7 +61,7 @@ ive run the uninstall on my own mac only. it prints whether the permissions were
 
 ### signing
 
-`build.sh` signs with your apple development certificate if you have a valid one. a free apple id is enough: sign in under xcode > settings > accounts. check it took with `security find-identity -v -p codesigning`. if that says 0 valid identities, install apple's "worldwide developer relations - g3" intermediate from apple.com/certificateauthority - xcode didnt add it on my mac. with that, macos keeps the audio and accessibility grants across rebuilds. without one it signs ad hoc, and macos asks again after every update. set `SIGN_ID` to pick a specific identity.
+optional, and it needs xcode. `build.sh` signs with your apple development certificate if you have a valid one. a free apple id is enough: sign in under xcode > settings > accounts. check it took with `security find-identity -v -p codesigning`. if that says 0 valid identities, install apple's "worldwide developer relations - g3" intermediate from apple.com/certificateauthority - xcode didnt add it on my mac. with that, macos keeps the audio and accessibility grants across rebuilds. without one it signs ad hoc, and macos asks again after every update. set `SIGN_ID` to pick a specific identity.
 
 ad hoc has a cost beyond the nagging: you get used to re-approving audio and accessibility. only approve those prompts right after an update you ran yourself. if one shows up out of nowhere, something replaced the app, so deny it.
 
@@ -63,7 +71,7 @@ ad hoc has a cost beyond the nagging: you get used to re-approving audio and acc
 | --- | --- |
 | open | rest the pointer on the notch, drag something onto it, or press ⌃⌥V |
 | close | move away, press esc, or click somewhere else |
-| tabs | icons left of the notch: media, shelf, clipboard |
+| tabs | icons left of the notch: media, shelf, clipboard. or swipe sideways with two fingers |
 | settings | gear right of the notch: launch at login, activity beside notch, full screen, clipboard recording, quit |
 
 ### media
@@ -82,6 +90,7 @@ drag anything onto the notch to park it: files, images, links, text. items are t
 
 the shelf MOVES files. it doesnt copy them. dropping a file on the notch only notes where the file is. drag it out into a finder folder and the original goes there, from wherever it was. nothing is duplicated, on the shelf or after. this is new. your own files used to copy out by default.
 
+- the shelf grows down a row at a time, four tiles a row, up to three rows. past that it scrolls.
 - click a tile to select it. ⌘-click adds or removes one, ⇧-click selects a range. drag any selected tile and they all go together. the check mark button selects everything. the buttons and the right-click menu act on the selection.
 - hold ⌥ while dropping to copy and leave the original in place. hold ⌘ to insist on a move.
 - the destination does the move, not nxtch. an app that only reads the file (a browser upload, a mail attachment) leaves the original alone. finder should copy instead when the folder is on another disk. untested, i only tried one disk.
@@ -134,6 +143,8 @@ with an ad hoc signature macos may ask again after every update. signing with yo
 - nxtch only ever deletes files inside its own shelf and clipboard folders, even if its saved lists were edited. when a shelf file moves, the destination moved it. nxtch never moves or deletes your originals itself.
 - now-playing data comes from any app or web page, so its times are clamped before use.
 
+to report a hole, see [SECURITY.md](SECURITY.md).
+
 what it costs to run, and what stays out on purpose, is in [SCOPE.md](SCOPE.md). what changed in each version is in [CHANGELOG.md](CHANGELOG.md).
 
 ## project layout
@@ -162,9 +173,10 @@ Resources/make-icon.swift    draws it
 build.sh
 CHANGELOG.md
 SCOPE.md
+SECURITY.md
 ```
 
-`swift test` runs the tests. 19 of them, none touch audio, the pasteboard or the screen. those parts i test by hand.
+`swift test` runs the tests (that one needs full xcode). 20 of them, none touch audio, the pasteboard or the screen. those parts i test by hand.
 
 
 ## license

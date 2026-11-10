@@ -24,6 +24,8 @@ final class ShelfStore: ObservableObject {
     private var anchor: UUID?
     /// The items being dragged out of the shelf (shows the Delete zone).
     @Published private(set) var dragging: Set<UUID> = []
+    /// A drag is over the Delete zone.
+    @Published var deleteTargeted = false
     var isDragging: Bool { !dragging.isEmpty }
     /// The current drag out ended on nxtch itself (shelf or Delete zone), not somewhere else.
     private var droppedInternally = false
@@ -142,7 +144,7 @@ final class ShelfStore: ObservableObject {
 
     /// Shelf items are temporary: a successful drop anywhere else takes them off the shelf.
     func finishDrag(_ dragged: [ShelfItem], operation: NSDragOperation) {
-        defer { dragging = []; droppedInternally = false }
+        defer { dragging = []; deleteTargeted = false; droppedInternally = false }
         guard !droppedInternally, !operation.isEmpty else { return }
         for item in dragged where items.contains(where: { $0.id == item.id }) { release(item, operation: operation) }
     }
@@ -204,7 +206,9 @@ final class ShelfStore: ObservableObject {
         let saveLinkOrText = {
             if isLink {
                 _ = p.loadObject(ofClass: URL.self) { url, _ in
-                    guard let url, let dest = AppFiles.unique((url.host() ?? "link") + ".webloc", in: storage),
+                    // Only web and mail links: a .webloc opens whatever its URL scheme points at.
+                    guard let url, ["http", "https", "mailto"].contains(url.scheme?.lowercased() ?? ""),
+                          let dest = AppFiles.unique((url.host() ?? "link") + ".webloc", in: storage),
                           let data = try? PropertyListSerialization.data(fromPropertyList: ["URL": url.absoluteString], format: .xml, options: 0),
                           (try? data.write(to: dest, options: .withoutOverwriting)) != nil else { return }
                     add(dest, true)

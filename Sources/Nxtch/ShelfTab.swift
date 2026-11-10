@@ -21,12 +21,16 @@ struct ShelfTab: View {
             .padding(.vertical, 8)
         } else {
             HStack(spacing: 8) {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
+                // Grows down a row at a time (the panel follows), and scrolls past the last one.
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVGrid(columns: Array(repeating: GridItem(.fixed(NotchViewModel.shelfTileSize.width),
+                                                                 spacing: NotchViewModel.shelfSpacing),
+                                             count: NotchViewModel.shelfColumns),
+                              alignment: .leading, spacing: NotchViewModel.shelfSpacing) {
                         ForEach(shelf.items) { item in ShelfTile(item: item, shelf: shelf) }
                     }
                     .padding(.vertical, 8)
-                    .frame(maxHeight: .infinity)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
                     .onTapGesture { shelf.clearSelection() }   // a click beside the tiles
                 }
@@ -43,9 +47,9 @@ struct ShelfTab: View {
 /// Appears while you drag an item out of the shelf: drop on it to delete the item.
 private struct DeleteZone: View {
     @ObservedObject var shelf: ShelfStore
-    @State private var hot = false
 
     var body: some View {
+        let hot = shelf.deleteTargeted
         VStack(spacing: 6) {
             Image(systemName: hot ? "trash.fill" : "trash").font(.system(size: 26, weight: .semibold))
             Text("Delete").font(.system(size: 12, weight: .semibold))
@@ -64,7 +68,7 @@ private struct DeleteZone: View {
         .scaleEffect(hot ? 1.05 : 1)
         .animation(.control, value: hot)
         .padding(.vertical, 8)
-        .onDrop(of: [.fileURL], isTargeted: $hot) { _ in
+        .onDrop(of: [.fileURL], isTargeted: $shelf.deleteTargeted) { _ in
             shelf.deleteDragged()
         }
     }

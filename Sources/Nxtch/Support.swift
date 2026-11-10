@@ -54,7 +54,6 @@ enum Log {
 
 extension Notification.Name {
     static let nxtchRequestClose = Notification.Name("nxtchRequestClose")
-    static let nxtchFocusSearch = Notification.Name("nxtchFocusSearch")
 }
 
 // MARK: Global shortcut

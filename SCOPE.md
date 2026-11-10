@@ -10,7 +10,7 @@ hard limits. a change that breaks one doesnt ship.
 | --- | --- |
 | idle cpu, notch closed | about 0% with nothing playing. 2% max while an app is playing (closed-notch meter on) |
 | memory | under 80 MB resident with a full clipboard history |
-| dependencies | none. apple frameworks only, one binary, built with `swift build` |
+| dependencies | none. apple frameworks only, one binary, built with `swiftc` from the command line tools |
 | helpers | one (`osascript` for now playing), and it quits when nxtch quits |
 | network | none. no accounts, sync, analytics, crash reporting or auto-update |
 | permissions | only when a feature is used. audio capture, and accessibility only for paste from history |
@@ -29,6 +29,7 @@ hard limits. a change that breaks one doesnt ship.
 - drop anything on the notch. files are referenced. text, links, images and file promises are saved.
 - items are temporary. a successful drag out takes them off the shelf, and moves the original file to where you dropped it (⌥ copies instead). a delete zone shows up while you drag.
 - select one or several (⌘-click, ⇧-click, or the select-all check mark) and drag them out together.
+- grows down a row at a time, four tiles a row, up to three rows, then scrolls.
 - open, show in finder, copy, airdrop, delete, clear. they act on the selection, or on everything without one.
 - survives a relaunch. files that disappear drop off the shelf.
 

@@ -6,7 +6,6 @@ import SwiftUI
 struct ClipboardTab: View {
     @ObservedObject var store: ClipboardStore
     let enabled: Bool
-    @FocusState private var searchFocused: Bool
 
     var body: some View {
         VStack(spacing: 4) {
@@ -15,7 +14,6 @@ struct ClipboardTab: View {
                 TextField("", text: $store.query, prompt: Text("Search").foregroundStyle(.white.opacity(0.35)))
                     .textFieldStyle(.plain)
                     .font(.system(size: 12))
-                    .focused($searchFocused)
                     .onSubmit {
                         let items = store.visible
                         if store.selection < items.count { store.paste(items[store.selection]) }
@@ -50,8 +48,6 @@ struct ClipboardTab: View {
             }
         }
         .padding(.top, 2)
-        // ⌃⌥V makes the panel key; put the cursor in the search field.
-        .onReceive(NotificationCenter.default.publisher(for: .nxtchFocusSearch)) { _ in searchFocused = true }
     }
 }
 

@@ -210,7 +210,7 @@ final class ClipboardStore: ObservableObject {
                   let src = CGImageSourceCreateWithData(data as CFData, nil),
                   let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
                   let w = props[kCGImagePropertyPixelWidth] as? Int, let h = props[kCGImagePropertyPixelHeight] as? Int,
-                  w * h <= Self.maxImagePixels,   // refuse decompression bombs before decoding
+                  w > 0, h > 0, w <= Self.maxImagePixels / h,   // refuse decompression bombs before decoding (no w * h overflow)
                   let png = pb.data(forType: .png) ?? NSBitmapImageRep(data: data)?.representation(using: .png, properties: [:])
             else { return }
             let name = UUID().uuidString + ".png"
@@ -262,9 +262,12 @@ final class ClipboardStore: ObservableObject {
         try? FileManager.default.removeItem(at: url)
     }
 
+    /// One queue, so writes land in the order they were made.
+    private static let saveQueue = DispatchQueue(label: "dev.nxtch.clipboard.save", qos: .utility)
+
     private func save() {
         let snapshot = items, url = historyURL
-        DispatchQueue.global(qos: .utility).async {
+        Self.saveQueue.async {
             guard let data = try? JSONEncoder().encode(snapshot) else { return }
             try? data.write(to: url, options: .atomic)
             try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)

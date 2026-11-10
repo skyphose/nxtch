@@ -2,6 +2,17 @@
 
 newest first. every version is a git tag, so `git checkout v0.3.0` gets you that build.
 
+## 0.5.0 - 2026-11-10
+
+no more full xcode, a shelf that grows instead of scrolling, and swiping between tabs.
+
+- builds with the command line tools alone. full xcode isnt needed anymore, for homebrew or by hand. `build.sh` calls `swiftc` directly, since swiftpm in the command line tools fails on recent macos.
+- `build.sh` refuses to run with sudo, and wont replace /Applications/Nxtch.app if its a symlink.
+- clipboard: the image size check cant overflow, and history writes land in order.
+- shelf: a dragged link is only kept if its http, https or mailto.
+- shelf: grows down a row at a time, four tiles a row, up to three rows, then scrolls. it used to scroll sideways.
+- swipe sideways with two fingers on the open notch to switch tabs.
+
 ## 0.4.0 - 2026-11-10
 
 the shelf became a file mover, and the app got a security pass before going public.

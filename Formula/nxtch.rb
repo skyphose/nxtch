@@ -4,18 +4,16 @@
 class Nxtch < Formula
   desc "Per-app volume, a file shelf and clipboard history in the MacBook notch"
   homepage "https://github.com/skyphose/nxtch"
-  url "https://github.com/skyphose/nxtch.git", tag: "v0.4.0"
+  url "https://github.com/skyphose/nxtch.git", tag: "v0.5.0"
   license "MIT"
   head "https://github.com/skyphose/nxtch.git", branch: "main"
 
-  depends_on xcode: ["15.0", :build]
+  # Builds with the command line tools Homebrew already needs. Full Xcode is not required.
   depends_on macos: :sonoma
 
   def install
-    # Ad hoc signature: the build has no access to your keychain. --disable-sandbox because
-    # Homebrew already builds inside its own sandbox.
+    # Ad hoc signature: the build has no access to your keychain.
     ENV["SIGN_ID"] = "-"
-    ENV["SWIFT_BUILD_FLAGS"] = "--disable-sandbox"
     system "./build.sh"
     prefix.install "Nxtch.app"
     libexec.install "build.sh"

@@ -164,4 +164,17 @@ final class LayoutTests: XCTestCase {
         XCTAssertEqual(NotchViewModel.leftEarWidth(icons: 9), NotchViewModel.leftEarWidth(icons: 4))
         XCTAssertEqual(NotchViewModel.leftEarWidth(icons: 0), one)
     }
+
+    func testShelfGrowsARowAtATimeUpToThree() {
+        let h = NotchViewModel.shelfHeight
+        XCTAssertEqual(h(0), h(4))            // empty and one full row are the same height
+        XCTAssertGreaterThan(h(5), h(4))      // a fifth item starts row two
+        XCTAssertGreaterThan(h(9), h(8))
+        XCTAssertEqual(h(13), h(12))          // three rows is the most, then it scrolls
+        XCTAssertEqual(h(200), h(12))
+        // four tiles and the Delete zone fit across the open notch
+        let n = CGFloat(NotchViewModel.shelfColumns)
+        let row = n * NotchViewModel.shelfTileSize.width + (n - 1) * NotchViewModel.shelfSpacing
+        XCTAssertLessThanOrEqual(row + 8 + 110, NotchViewModel.openWidth - 2 * (19 + 12))
+    }
 }
