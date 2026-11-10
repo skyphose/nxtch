@@ -2,6 +2,14 @@
 
 newest first. every version is a git tag, so `git checkout v0.3.0` gets you that build.
 
+## 0.6.0 - 2026-11-10
+
+a download instead of homebrew, and the repo goes public.
+
+- install: download the zip from the releases page. github builds it from the version tag, not my laptop, and each zip carries an attestation you can check with `gh attestation verify`.
+- the zip isnt notarized, so macos asks you to allow it once under privacy & security. building it yourself still skips that.
+- homebrew is gone. its formula couldnt pin the exact commit it built, and `build.sh` loses the two settings only homebrew used.
+
 ## 0.5.2 - 2026-11-10
 
 fixes from a last security audit before going public. none are critical, all need another program already running as you, or a bad setting.
