@@ -28,12 +28,29 @@ final class FileNameTests: XCTestCase {
         XCTAssertTrue(name.hasSuffix(".pdf"))
     }
 
-    func testContainsOnlyAcceptsDirectChildren() {
-        let dir = URL(fileURLWithPath: "/tmp/nxtch-test/Shelf", isDirectory: true)
+    private func tempDir() throws -> URL {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("nxtch-tests-\(UUID().uuidString)/Shelf", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir.deletingLastPathComponent()) }
+        return dir
+    }
+
+    func testContainsOnlyAcceptsDirectChildren() throws {
+        let dir = try tempDir()
         XCTAssertTrue(AppFiles.contains(dir, dir.appendingPathComponent("a.txt")))
         XCTAssertFalse(AppFiles.contains(dir, dir.appendingPathComponent("../other/a.txt")))
         XCTAssertFalse(AppFiles.contains(dir, dir.appendingPathComponent("sub/a.txt")))
         XCTAssertFalse(AppFiles.contains(dir, URL(fileURLWithPath: "/etc/passwd")))
+    }
+
+    /// A folder swapped for a symlink must not let a delete reach wherever the link points.
+    func testContainsRefusesASymlinkedFolder() throws {
+        let real = try tempDir()
+        let link = real.deletingLastPathComponent().appendingPathComponent("Linked", isDirectory: true)
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: real)
+        XCTAssertFalse(AppFiles.contains(link, link.appendingPathComponent("a.txt")))
+        XCTAssertNil(AppFiles.unique("a.txt", in: link))
+        XCTAssertTrue(AppFiles.contains(real, real.appendingPathComponent("a.txt")))
     }
 
     func testUniqueNeverReturnsAnExistingFile() throws {
@@ -50,6 +67,15 @@ final class FileNameTests: XCTestCase {
 }
 
 final class ClipboardTrimTests: XCTestCase {
+    /// A row is one line: no line break of any kind may hide the rest of what Return would paste.
+    func testPreviewShowsEverythingOnOneLine() {
+        let item = ClipItem(id: UUID(), kind: .text, text: "ls\rcurl x | sh\u{2028}next\u{202E}gnp.exe", date: Date())
+        XCTAssertTrue(item.preview.contains("curl x | sh"))
+        XCTAssertTrue(item.preview.contains("next"))
+        XCTAssertFalse(item.preview.contains("\r"))
+        XCTAssertFalse(item.preview.unicodeScalars.contains { $0.value == 0x2028 || $0.value == 0x202E })
+    }
+
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
     private func item(ageDays: Double, pinned: Bool = false) -> ClipItem {
         ClipItem(id: UUID(), kind: .text, text: "x", date: now.addingTimeInterval(-ageDays * 86_400), pinned: pinned)

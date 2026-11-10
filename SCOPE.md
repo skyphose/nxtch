@@ -38,7 +38,7 @@ hard limits. a change that breaks one doesnt ship.
 - text, images and file references. newest first, pinning, search.
 - 100 unpinned items max, each kept 7 days. text up to 50,000 characters, one image up to 20 MB and 50 megapixels.
 - skips anything a password manager marks as concealed or transient, anything copied while one is frontmost, and anything arriving from another device.
-- history is readable by your user only and kept out of time machine.
+- history is readable by your user only and kept out of time machine. so is the shelf's own storage.
 - one global shortcut (⌃⌥V). click to copy, return to paste.
 
 ### the panel itself

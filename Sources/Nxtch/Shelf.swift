@@ -33,12 +33,12 @@ final class ShelfStore: ObservableObject {
     nonisolated static let maxCopiedBytes = 1 << 30
 
     init() {
-        if let data = UserDefaults.standard.data(forKey: "shelfItems"),
-           let saved = try? JSONDecoder().decode([ShelfItem].self, from: data) {
-            items = saved
-        }
+        let data = UserDefaults.standard.data(forKey: "shelfItems")
+        let saved = data.flatMap { try? JSONDecoder().decode([ShelfItem].self, from: $0) }
+        items = saved ?? []
         prune()
-        sweep()
+        // A list that won't load may still name the only copy of some dropped text: keep the files.
+        if data == nil || saved != nil { sweep() }
         items.forEach(makeThumbnail)
     }
 
@@ -84,7 +84,7 @@ final class ShelfStore: ObservableObject {
     private func sweep() {
         // Never through a symlink: if the folder were swapped for a link to somewhere else, this
         // would empty that place instead.
-        guard (try? FileManager.default.attributesOfItem(atPath: storage.path))?[.type] as? FileAttributeType == .typeDirectory else { return }
+        guard AppFiles.isOwnFolder(storage) else { return }
         let kept = Set(items.map(\.url.standardizedFileURL.path))
         let files = (try? FileManager.default.contentsOfDirectory(at: storage, includingPropertiesForKeys: nil)) ?? []
         for f in files where !kept.contains(f.standardizedFileURL.path) { try? FileManager.default.removeItem(at: f) }
@@ -155,9 +155,10 @@ final class ShelfStore: ObservableObject {
         Log.shelf.info("dragged out op=\(operation.rawValue, privacy: .public); removed from shelf")
         // The drag ending only means the destination accepted. Finder moves or copies the file
         // afterwards, so deleting nxtch's copy now pulls it out from under Finder (error -8058).
-        // A move takes the file away by itself; a copy leaves ours behind, deleted a minute later.
+        // A move takes the file away by itself; a copy leaves ours behind, deleted ten minutes
+        // later (a big copy to a slow disk can take a while), or at the next launch.
         if item.owned, !operation.contains(.move) {
-            after(60) { [weak self] in self?.deleteOwned(item) }
+            after(600) { [weak self] in self?.deleteOwned(item) }
         }
         return true
     }

@@ -4,7 +4,7 @@
 class Nxtch < Formula
   desc "Per-app volume, a file shelf and clipboard history in the MacBook notch"
   homepage "https://github.com/skyphose/nxtch"
-  url "https://github.com/skyphose/nxtch.git", tag: "v0.5.1"
+  url "https://github.com/skyphose/nxtch.git", tag: "v0.5.2"
   license "MIT"
   head "https://github.com/skyphose/nxtch.git", branch: "main"
 

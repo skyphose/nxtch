@@ -63,7 +63,9 @@ final class MixerModel: ObservableObject {
     private let defaults = UserDefaults.standard
 
     init() {
-        volumes = (defaults.dictionary(forKey: "volumes") as? [String: Float]) ?? [:]
+        // Saved levels go through the same limits as a slider; anything not a number is dropped.
+        volumes = ((defaults.dictionary(forKey: "volumes") as? [String: Float]) ?? [:])
+            .compactMapValues { $0.isFinite ? Self.level($0, snap: false) : nil }
         muted = Set(defaults.stringArray(forKey: "muted") ?? [])
         refresh()
         CA.listen(CA.system, kAudioHardwarePropertyProcessObjectList) { [weak self] in

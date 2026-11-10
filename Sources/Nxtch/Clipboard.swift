@@ -25,7 +25,12 @@ struct ClipItem: Identifiable, Codable, Equatable {
 
     var preview: String {
         switch kind {
-        case .text: return (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\n", with: " ⏎ ")
+        case .text:
+            // Every kind of line break shows, so nothing after a \r or U+2028 hides past the row's
+            // one line (Return pastes all of it). Only the start is ever visible.
+            return String((text ?? "").prefix(400)).trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: "[\\r\\n\\x{0B}\\x{0C}\\x{85}\\x{2028}\\x{2029}]+", with: " ⏎ ", options: .regularExpression)
+                .withoutInvisibles
         case .files: return fileNames.count == 1 ? fileNames[0] : "\(fileNames.count) files: \(fileNames.prefix(3).joined(separator: ", "))"
         case .image: return "Image"
         }
@@ -72,24 +77,28 @@ final class ClipboardStore: ObservableObject {
         "com.markmcguill.strongbox.mac", "com.callpod.keepermac.lite", "com.nordpass.macos.NordPass",
     ]
 
-    private let storage: URL = {
-        var dir = AppFiles.dir("Clipboard")
-        var values = URLResourceValues()
-        values.isExcludedFromBackup = true      // keep copied secrets out of Time Machine
-        try? dir.setResourceValues(values)
-        return dir
-    }()
+    private let storage = AppFiles.dir("Clipboard")
+    /// Bundle ids of apps that came to the front since the last poll.
+    private var activated: Set<String> = []
     private var historyURL: URL { storage.appendingPathComponent("history.json") }
     private var lastChange = NSPasteboard.general.changeCount
     private var timer: Timer?
     private let thumbnails: NSCache<NSString, NSImage> = { let c = NSCache<NSString, NSImage>(); c.countLimit = 48; return c }()
 
     init() {
-        if let data = try? Data(contentsOf: historyURL), let saved = try? JSONDecoder().decode([ClipItem].self, from: data) {
-            // The file could have been edited: an image name must be one nxtch made itself.
-            items = saved.filter { $0.imageFile == nil || imageURL($0.imageFile) != nil }
-        }
+        let data = try? Data(contentsOf: historyURL)
+        let saved = data.flatMap { try? JSONDecoder().decode([ClipItem].self, from: $0) }
+        // The file could have been edited: an image name must be one nxtch made itself.
+        items = (saved ?? []).filter { $0.imageFile == nil || imageURL($0.imageFile) != nil }
         expire()
+        if data == nil || saved != nil { removeStrayImages() }
+        // A password manager that was in front at any point since the last poll counts, not only
+        // one still in front when the poll runs.
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification,
+                                                          object: nil, queue: .main) { [weak self] note in
+            let id = (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.bundleIdentifier
+            MainActor.assumeIsolated { if let id { self?.activated.insert(id) } }
+        }
         timer = .repeating(0.5, tolerance: 0.2) { [weak self] in self?.poll() }
     }
 
@@ -97,6 +106,15 @@ final class ClipboardStore: ObservableObject {
     var visible: [ClipItem] {
         let base = query.isEmpty ? items : items.filter { $0.searchText.localizedCaseInsensitiveContains(query) }
         return base.filter(\.pinned) + base.filter { !$0.pinned }
+    }
+
+    /// Images history doesn't point at (nxtch quit before it saved) would otherwise never expire.
+    private func removeStrayImages() {
+        let kept = Set(items.compactMap(\.imageFile))
+        let files = (try? FileManager.default.contentsOfDirectory(atPath: storage.path)) ?? []
+        for name in files where !kept.contains(name) {
+            if let url = imageURL(name) { try? FileManager.default.removeItem(at: url) }
+        }
     }
 
     /// Where a stored image lives. Only "<UUID>.png" is accepted, so a name can't point outside
@@ -196,11 +214,14 @@ final class ClipboardStore: ObservableObject {
 
     private func poll() {
         let pb = NSPasteboard.general
+        let recent = activated
+        activated = []
         guard pb.changeCount != lastChange else { return }
         lastChange = pb.changeCount
         let source = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         let types = Set((pb.types ?? []).map(\.rawValue))
-        guard enabled, types.isDisjoint(with: Self.ignoredTypes), !Self.ignoredApps.contains(source ?? "") else {
+        guard enabled, types.isDisjoint(with: Self.ignoredTypes), !Self.ignoredApps.contains(source ?? ""),
+              recent.isDisjoint(with: Self.ignoredApps) else {
             Log.clipboard.info("skipped item (paused, concealed, or from a password manager)")
             return
         }
@@ -218,7 +239,7 @@ final class ClipboardStore: ObservableObject {
                   let png = pngData ?? NSBitmapImageRep(data: data)?.representation(using: .png, properties: [:])
             else { return }
             let name = UUID().uuidString + ".png"
-            guard FileManager.default.createFile(atPath: storage.appendingPathComponent(name).path, contents: png,
+            guard pb.changeCount == lastChange, FileManager.default.createFile(atPath: storage.appendingPathComponent(name).path, contents: png,
                                                  attributes: [.posixPermissions: 0o600]) else { return }
             insert(ClipItem(id: UUID(), kind: .image, imageFile: name, sourceBundleID: source, date: Date()))
         } else if let s = pb.string(forType: .string), !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -227,6 +248,9 @@ final class ClipboardStore: ObservableObject {
     }
 
     private func insert(_ item: ClipItem) {
+        // The types were checked a moment before the content was read. If something else was
+        // copied in between (a password manager's concealed item), skip it: the next poll sees it.
+        guard NSPasteboard.general.changeCount == lastChange else { return }
         Log.clipboard.info("captured kind=\(item.kind.rawValue, privacy: .public)")
         var item = item
         if item.kind != .image, let i = items.firstIndex(where: { $0.kind == item.kind && $0.text == item.text && $0.paths == item.paths }) {

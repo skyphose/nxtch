@@ -110,22 +110,34 @@ enum Keystroke {
 
 // MARK: Files on disk
 
-/// ~/Library/Application Support/nxtch/<name>, readable by this user only.
+/// ~/Library/Application Support/nxtch/<name>: readable by this user only, kept out of Time Machine.
 enum AppFiles {
     static func dir(_ name: String) -> URL {
-        let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        var url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("nxtch/\(name)", isDirectory: true)
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        // Never through a symlink: that would change wherever the link points instead.
+        guard isOwnFolder(url) else { return url }
         try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path)   // also fixes existing folders
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? url.setResourceValues(values)
         return url
+    }
+
+    /// `dir` and the nxtch folder above it are real folders, not symlinks to somewhere else.
+    /// Everything nxtch writes or deletes goes through this, so a swapped-in link can't send a
+    /// delete into your Documents.
+    static func isOwnFolder(_ dir: URL) -> Bool {
+        [dir, dir.deletingLastPathComponent()].allSatisfy {
+            (try? FileManager.default.attributesOfItem(atPath: $0.path))?[.type] as? FileAttributeType == .typeDirectory
+        }
     }
 
     /// A file name that can't leave its folder or disguise itself: no path separators or "..",
     /// no control or bidi-override characters, not hidden, not absurdly long.
     static func safeName(_ raw: String, fallback: String = "item") -> String {
-        let cleaned = String(String.UnicodeScalarView(raw.unicodeScalars.filter {
-            !CharacterSet.controlCharacters.contains($0) && $0.properties.generalCategory != .format
-        }))
+        let cleaned = raw.withoutInvisibles
         .replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
         .trimmingCharacters(in: CharacterSet(charactersIn: ". ").union(.whitespacesAndNewlines))
         let ext = (cleaned as NSString).pathExtension
@@ -149,6 +161,16 @@ enum AppFiles {
     }
 
     static func contains(_ dir: URL, _ url: URL) -> Bool {
-        url.standardizedFileURL.deletingLastPathComponent().path == dir.standardizedFileURL.path
+        url.standardizedFileURL.deletingLastPathComponent().path == dir.standardizedFileURL.path && isOwnFolder(dir)
+    }
+}
+
+extension String {
+    /// Without control and format characters (bidi overrides, zero-width joiners and the like),
+    /// which can hide or disguise what a string really says.
+    var withoutInvisibles: String {
+        String(String.UnicodeScalarView(unicodeScalars.filter {
+            !CharacterSet.controlCharacters.contains($0) && $0.properties.generalCategory != .format
+        }))
     }
 }

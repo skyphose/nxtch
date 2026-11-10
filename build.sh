@@ -13,8 +13,17 @@ if [[ $EUID -eq 0 ]]; then echo "Run build.sh as yourself, not with sudo." >&2; 
 APP=Nxtch.app
 BUNDLE_ID=dev.nxtch.app
 
+# A real nxtch: named Nxtch.app, not a symlink, with nxtch's bundle id. Nothing else gets run or rm -rf'd.
+is_nxtch() {
+  [[ "${1:t}" == "$APP" && ! -L "$1" &&
+     "$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$1/Contents/Info.plist" 2>/dev/null)" == "$BUNDLE_ID" ]]
+}
+
 if [[ " $* " == *" --uninstall "* ]]; then
   INSTALLED="${NXTCH_APP:-/Applications/$APP}"   # homebrew keeps the app somewhere else
+  if [[ -e "$INSTALLED" || -L "$INSTALLED" ]] && ! is_nxtch "$INSTALLED"; then
+    echo "$INSTALLED doesnt look like nxtch. Not touching it." >&2; exit 1
+  fi
   LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
   # Launch at login is registered against the installed app, so turn it off before removing it.
   [[ -x "$INSTALLED/Contents/MacOS/Nxtch" ]] && "$INSTALLED/Contents/MacOS/Nxtch" --unregister-login-item || true
@@ -51,8 +60,9 @@ codesign --force --options runtime --sign "${SIGN_ID:--}" "$APP"
 echo "Built $(pwd)/$APP (signed: ${SIGN_ID:-ad hoc})"
 
 if [[ " $* " == *" --install "* ]]; then
-  # Only ever replace a real Nxtch.app, never whatever a symlink points at.
-  if [[ -L "/Applications/$APP" ]]; then echo "/Applications/$APP is a symlink. Not touching it." >&2; exit 1; fi
+  if [[ -e "/Applications/$APP" || -L "/Applications/$APP" ]] && ! is_nxtch "/Applications/$APP"; then
+    echo "/Applications/$APP doesnt look like nxtch. Not touching it." >&2; exit 1
+  fi
   pkill -x Nxtch 2>/dev/null && sleep 1 || true
   rm -rf "/Applications/$APP" && cp -R "$APP" /Applications/
   echo "Installed /Applications/$APP"

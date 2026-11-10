@@ -11,7 +11,7 @@ i wanted four small things on my mac: a volume knob per app, a place to park a f
 | a shelf | drop anything on the notch, drag it out and the original moves there | conversion, renaming, sync |
 | clipboard history | text, images and files. ⌃⌥V to search, return to paste | rich text, snippets, sync |
 
-all of it is one app: a 1.3 MB binary, one process, apple frameworks only, no network. with the notch closed and nothing playing it uses 0.1 - 0.4% cpu and about 14 MB of memory. with audio playing, 1.1 - 1.5%. those are from my macbook.
+all four live in one app: a 1.3 MB binary, one process, apple frameworks only, no network. with the notch closed and nothing playing it uses 0.1 - 0.4% cpu and about 14 MB of memory. with audio playing, 1.1 - 1.5%. those are from my macbook.
 
 <img src="Resources/screenshots/closed.png" width="328" alt="the closed notch: icons of the apps playing on the left, one level meter on the right">
 
@@ -26,7 +26,7 @@ all of it is one app: a 1.3 MB binary, one process, apple frameworks only, no ne
 - you want album art. theres none, on purpose. getting it means loading unsigned code into a system program or downloading it from each service. you get the app icon instead.
 - you want widgets: calendar, weather, battery, a camera mirror. boring.notch has those.
 - you live on an external display. nxtch sits on the notch screen only.
-- you need rich text out of your clipboard history. it keeps plain text, images and file references.
+- you need rich text out of your clipboard history. it keeps plain text, images and file reefrences.
 - you copy passwords out of a browser extension or a terminal. those look like any other text, so they sit in the clipboard history for up to 7 days unless you delete them.
 - you dont want an app that leans on private api. now playing uses apple's `MediaRemote` framework through `osascript`, and a future macos can break it.
 
@@ -63,6 +63,8 @@ ive run the uninstall on my own mac only. it prints whether the permissions were
 
 optional, and it needs xcode. `build.sh` signs with your apple development certificate if you have a valid one. a free apple id is enough: sign in under xcode > settings > accounts. check it took with `security find-identity -v -p codesigning`. if that says 0 valid identities, install apple's "worldwide developer relations - g3" intermediate from apple.com/certificateauthority - xcode didnt add it on my mac. with that, macos keeps the audio and accessibility grants across rebuilds. without one it signs ad hoc, and macos asks again after every update. set `SIGN_ID` to pick a specific identity.
 
+the grants surviving a rebuild is untested. my certificate still shows 0 valid identities, so every build on my mac has been ad hoc.
+
 ad hoc has a cost beyond the nagging: you get used to re-approving audio and accessibility. only approve those prompts right after an update you ran yourself. if one shows up out of nowhere, something replaced the app, so deny it.
 
 ## using it
@@ -72,7 +74,7 @@ ad hoc has a cost beyond the nagging: you get used to re-approving audio and acc
 | open | rest the pointer on the notch, drag something onto it, or press ⌃⌥V |
 | close | move away, press esc, or click somewhere else |
 | tabs | icons left of the notch: media, shelf, clipboard. or swipe sideways with two fingers |
-| settings | gear right of the notch: launch at login, activity beside notch, full screen, clipboard recording, quit |
+| settings | gear right of the notch: launch at login, activity beside notch, full screen, clipboard history, quit |
 
 ### media
 
@@ -84,7 +86,7 @@ whats playing (title, artist, progress, the app its in) with previous, play/paus
 - the reset button puts every app back to 100%. its at the top right of the media tab, and only shows when an app is muted or off 100%.
 - closed, the notch shows an icon for every app making sound on its left. up to four. one level meter sits on the right, and its bars follow the first app only.
 - the meter takes its color from the icons: green for spotify, orange for firefox. two apps fade from one color to the other. three or more make a wheel.
-- an icon with several colors gets one blended color, so chrome comes out orange too. chrome and firefox together is a flat orange. an icon with no real color gives white.
+- an icon with several colors gets one blended color, so chrome comes out orange too. chrome and firefox toegther is a flat orange. an icon with no real color gives white.
 
 ### shelf
 
@@ -92,13 +94,14 @@ whats playing (title, artist, progress, the app its in) with previous, play/paus
 
 drag anything onto the notch to park it: files, images, links, text. items are tmeporary. drag one out and drop it somewhere, and it leaves the shelf.
 
-the shelf MOVES files. it doesnt copy them. dropping a file on the notch only notes where the file is. drag it out into a finder folder and the original goes there, from wherever it was. nothing is duplicated, on the shelf or after. this is new. your own files used to copy out by default.
+the shelf MOVES files. it doesnt copy them. dropping a file on the notch only notes where the file is. drag it out into a finder folder and the original goes there, from wherever it was. nothing is duplicated, on the shelf or after. that started in 0.4.0. before it, your own files copied out by default.
 
 - the shelf grows down a row at a time, four tiles a row, up to three rows. past that it scrolls.
 - with two or more tiles, each gets a circle in its corner. click it to tick the tile, again to untick it. the check mark button ticks everything. drag a ticked tile and every ticked one goes with it. the buttons and the right-click menu act on the ticked tiles, or on everything when none are.
 - hold ⌥ while dropping to copy and leave the original in place. hold ⌘ to insist on a move.
+- a file dragged in from an app that only lets you copy it still moves when you drag it out, since the shelf tries a move on every file. hold ⌥ for those. i havent found which apps do this.
 - the destination does the move, not nxtch. an app that only reads the file (a browser upload, a mail attachment) leaves the original alone. finder should copy instead when the folder is on another disk. untested, i only tried one disk.
-- text, links, images and file promises (mail, photos, screenshots) get saved in `~/Library/Application Support/nxtch/Shelf`. those move out, so no copy is left behind. anything over 1 GB is skipped. files nxtch only references have no limit. if the place you drop one only takes its path instead of moving or copying it, it stays on the shelf.
+- text, links, images and file promises (mail, photos, screenshots) get saved in `~/Library/Application Support/nxtch/Shelf`, kept out of time machine. those move out, so no copy is left behind. anything over 1 GB is skipped. files nxtch only references have no limit. if the place you drop one only takes its path instead of moving or copying it, it stays on the shelf.
 - while you drag an item, a delete square shows up. drop it there to take it off the shelf. your original files are never trashed.
 - double-click opens an item. right-click for open, show in finder, copy, airdrop or delete.
 
@@ -110,7 +113,7 @@ press ⌃⌥V anywhere and type to search. ↑/↓ moves the selection, return p
 
 - click a row to copy it. right-click to paste, pin or delete.
 - to delete some entries and keep the rest, click the check mark button, pick the rows, then the trash. ⌘-click a row does the same without the button. the trash deletes what you picked, pinned or not. outside select mode it clears everything unpinned.
-- anything a password manager marks as concealed or transient is never recroded. nothing is recorded while a password manager is the frontmost app either, since not all of them mark their items. the list is in `Clipboard.swift`. four of the ids on it (macpass, strongbox, keeper, nordpass) i wrote down without an install to check against.
+- anything a password manager marks as concealed or transient is never recroded. nothing is recorded while a password manager is in front, or was at any point since the last check (twice a second), since not all of them mark their items. the list is in `Clipboard.swift`. four of the ids on it (macpass, strongbox, keeper, nordpass) i wrote down without an install to check against.
 - a password copied from a browser extension or a terminal looks like any other text, so that still gets recorded. delete it, or pause recording first.
 - unpinned items are dropped after 7 days.
 - things copied on your iphone (universal clipboard) arent recorded. untested.
@@ -143,10 +146,10 @@ with an ad hoc signature macos may ask again after every update. signing with yo
 
 ## security
 
-- signed with hardened runtime, so another process cant inject code into nxtch and borrow its audio or accessibility access.
+- signed with hardened runtime, so another process cant inject code into nxtch and borrow its audio or accessibility access. with your own certificate, the grants follow anything signed with it, so a program running as you that can sign with it keeps them too.
 - names of dropped files are cleaned before saving. a name cant leave the shelf folder, hide itself or fake its extension with right-to-left characters.
 - files nxtch saves get the quarantine flag, so gatekeeper still checks them when you open one.
-- nxtch only ever deletes files inside its own shelf and clipboard folders, even if its saved lists were edited. when a shelf file moves, the destination moved it. nxtch never moves or deletes your originals itself.
+- nxtch only ever deletes files inside its own shelf and clipboard folders, even if its saved lists were edited or a folder was swapped for a link. when a shelf file moves, the destination moved it. nxtch never moves or deletes your originals itself.
 - now-playing data comes from any app or web page, so its times are clamped before use.
 
 to report a hole, see [SECURITY.md](SECURITY.md).
@@ -183,7 +186,7 @@ SCOPE.md
 SECURITY.md
 ```
 
-`swift test` runs the tests (that one needs full xcode). 20 of them, none touch audio, the pasteboard or the screen. those parts i test by hand.
+`swift test` runs the tests (that one needs full xcode). 22 of them, none touch audio, the pasteboard or the screen. those parts i test by hand.
 
 
 ## license

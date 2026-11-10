@@ -2,13 +2,24 @@
 
 newest first. every version is a git tag, so `git checkout v0.3.0` gets you that build.
 
+## 0.5.2 - 2026-11-10
+
+fixes from a last security audit before going public. none are critical, all need another program already running as you, or a bad setting.
+
+- shelf: a delete can no longer follow a symlink. if the shelf folder was swapped for a link to, say, Documents, clear would have deleted a file there.
+- shelf: a saved list that wont load no longer makes nxtch delete every file it saved. a copied-out file now waits 10 minutes before its delete, not 60 s, so a slow copy can finish.
+- clipboard: something copied while a password manager was briefly in front is skipped, as is anything that changed while it was being read. images history lost track of are deleted at launch.
+- clipboard: every kind of line break shows in a row's preview, so text after a hidden \r cant sit out of sight.
+- saved volumes are range-checked on load. `build.sh` only removes or runs a real Nxtch.app with nxtch's bundle id.
+- the shelf's storage is kept out of time machine, like the clipboard's.
+
 ## 0.5.1 - 2026-11-10
 
 shelf ticks instead of modifier clicks, two media fixes, a lighter internal wiring, and screenshots.
 
-- shelf: a circle on each tile ticks it for a multi-drag, replacing ⌘-click and ⇧-click. clicking a tile in the new grid was clearing the selection on mouse up.
+- shelf: each tile has a circle to tick it for a multi-drag. ⌘-click and ⇧-click are gone. 0.5.0 shipped them broken: in the new grid, a click on a tile also cleared the selection on mouse up.
 - media: the play button goes back to the real state if the app ignored the press. the meter beside the closed notch follows a new now-playing app right away, not up to 5 s later.
-- cleanup: plain callbacks instead of combine pipelines, one save when several shelf items go at once, shelf thumbnails freed with their items, a copied image read off the pasteboard once.
+- cleanup: plain callbacks instead of combine pipelines. several shelf items leaving at once cost one save, and their thumbnails are freed. a copied image is read off the pasteboard once.
 - readme: screenshots of the closed notch and all three tabs.
 
 ## 0.5.0 - 2026-11-10
