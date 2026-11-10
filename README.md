@@ -13,6 +13,8 @@ i wanted four small things on my mac: a volume knob per app, a place to park a f
 
 all of it is one app: a 1.3 MB binary, one process, apple frameworks only, no network. with the notch closed and nothing playing it uses 0.1 - 0.4% cpu and about 14 MB of memory. with audio playing, 1.1 - 1.5%. those are from my macbook.
 
+<img src="Resources/screenshots/closed.png" width="328" alt="the closed notch: icons of the apps playing on the left, one level meter on the right">
+
 ## before you install
 
 - macos 14.2 or later. process taps arrived in 14.2. ive only run it on macos 27.2, on one m-series macbook pro. 14.2 is the floor on paper, not something i tested.
@@ -74,6 +76,8 @@ ad hoc has a cost beyond the nagging: you get used to re-approving audio and acc
 
 ### media
 
+<img src="Resources/screenshots/media.png" width="628" alt="the media tab: whats playing, then volume, mute and a meter for each app">
+
 whats playing (title, artist, progress, the app its in) with previous, play/pause and next. below that, one row per app making sound: volume 0 - 150%, mute, and a live level meter.
 
 - a slider sticks to 100% as it passes, within 2%. hold ⇧ while dragging to turn that off.
@@ -83,6 +87,8 @@ whats playing (title, artist, progress, the app its in) with previous, play/paus
 - an icon with several colors gets one blended color, so chrome comes out orange too. chrome and firefox together is a flat orange. an icon with no real color gives white.
 
 ### shelf
+
+<img src="Resources/screenshots/shelf.png" width="635" alt="the shelf: three files, two of them ticked">
 
 drag anything onto the notch to park it: files, images, links, text. items are tmeporary. drag one out and drop it somewhere, and it leaves the shelf.
 
@@ -97,6 +103,8 @@ the shelf MOVES files. it doesnt copy them. dropping a file on the notch only no
 - double-click opens an item. right-click for open, show in finder, copy, airdrop or delete.
 
 ### clipboard
+
+<img src="Resources/screenshots/clipboard.png" width="635" alt="the clipboard tab: search, then history with the app each item came from">
 
 press ⌃⌥V anywhere and type to search. ↑/↓ moves the selection, return pastes into the app you were in.
 
@@ -168,6 +176,7 @@ Resources/Info.plist
 Resources/AppIcon.icns       the app icon
 Resources/icon.png           the same icon, for this readme
 Resources/make-icon.swift    draws it
+Resources/screenshots/       the pictures in this readme
 build.sh
 CHANGELOG.md
 SCOPE.md
