@@ -62,6 +62,7 @@ final class NowPlayingMonitor: ObservableObject {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         p.arguments = ["-l", "JavaScript", "-e", script, arg]
+        p.environment = ["HOME": NSHomeDirectory()]   // nothing inherited from whatever launched nxtch
         p.standardOutput = FileHandle.nullDevice
         p.standardError = stderr ?? FileHandle.nullDevice
         do { try p.run(); return p } catch { NSLog("nxtch: osascript failed: \(error)"); return nil }
@@ -90,6 +91,7 @@ final class NowPlayingMonitor: ObservableObject {
 
     private func consume(_ data: Data) {
         buffer.append(data)
+        if buffer.count > 1 << 20 { buffer.removeAll() }   // a line is a few hundred bytes
         while let nl = buffer.firstIndex(of: 0x0A) {
             let line = buffer[buffer.startIndex..<nl]
             buffer.removeSubrange(buffer.startIndex...nl)
@@ -101,10 +103,11 @@ final class NowPlayingMonitor: ObservableObject {
         guard let title = o["title"] as? String, !title.isEmpty else { info = nil; return }
         // Any web page can set these through the Media Session API, so keep them in a sane range.
         func seconds(_ key: String) -> Double? { (o[key] as? Double).flatMap { $0.isFinite && $0 >= 0 && $0 < 1e7 ? $0 : nil } }
+        func text(_ key: String) -> String? { (o[key] as? String).flatMap { $0.isEmpty ? nil : String($0.prefix(300)) } }
         info = NowPlayingInfo(
-            title: title,
-            artist: (o["artist"] as? String).flatMap { $0.isEmpty ? nil : $0 },
-            album: o["album"] as? String,
+            title: String(title.prefix(300)),
+            artist: text("artist"),
+            album: text("album"),
             bundleID: o["bundle"] as? String,
             parentBundleID: o["parent"] as? String,
             isPlaying: o["playing"] as? Bool ?? false,

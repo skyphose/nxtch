@@ -74,6 +74,7 @@ final class ShelfStore: ObservableObject {
             items = saved
         }
         prune()
+        sweep()
         items.forEach(makeThumbnail)
     }
 
@@ -89,12 +90,28 @@ final class ShelfStore: ObservableObject {
         save()
     }
 
-    func remove(_ item: ShelfItem) {
+    func remove(_ item: ShelfItem) { remove(item, deleteFile: true) }
+
+    private func remove(_ item: ShelfItem, deleteFile: Bool) {
         items.removeAll { $0.id == item.id }
         thumbnails[item.id] = nil
-        // Only ever delete nxtch's own copies, even if the saved list was tampered with.
-        if item.owned, AppFiles.contains(storage, item.url) { try? FileManager.default.removeItem(at: item.url) }
+        if deleteFile { deleteOwned(item) }
         save()
+    }
+
+    /// Only ever deletes nxtch's own copies, even if the saved list was tampered with, and never
+    /// one that is (back) on the shelf.
+    private func deleteOwned(_ item: ShelfItem) {
+        guard item.owned, AppFiles.contains(storage, item.url), !items.contains(where: { $0.path == item.path }) else { return }
+        try? FileManager.default.removeItem(at: item.url)
+    }
+
+    /// Deletes files left in nxtch's storage that no shelf item points at (nxtch quit before a
+    /// dragged-out copy was cleaned up).
+    private func sweep() {
+        let kept = Set(items.map(\.url.standardizedFileURL.path))
+        let files = (try? FileManager.default.contentsOfDirectory(at: storage, includingPropertiesForKeys: nil)) ?? []
+        for f in files where !kept.contains(f.standardizedFileURL.path) { try? FileManager.default.removeItem(at: f) }
     }
 
     func clear() { items.forEach(remove) }
@@ -127,8 +144,22 @@ final class ShelfStore: ObservableObject {
     func finishDrag(_ item: ShelfItem, operation: NSDragOperation) {
         defer { draggingItemID = nil; droppedInternally = false }
         guard !droppedInternally, !operation.isEmpty, items.contains(where: { $0.id == item.id }) else { return }
+        // nxtch's own copy is deleted with the item, so only let go of it when the destination
+        // said it moved or copied the file. A drop that just took the path keeps it on the shelf.
+        if item.owned, operation.isDisjoint(with: [.move, .copy]) {
+            Log.shelf.info("dragged out op=\(operation.rawValue, privacy: .public); kept (not moved or copied)")
+            return
+        }
         Log.shelf.info("dragged out op=\(operation.rawValue, privacy: .public); removed from shelf")
-        remove(item)
+        // The drag ending only means the destination accepted. Finder moves or copies the file
+        // afterwards, so deleting nxtch's copy now pulls it out from under Finder (error -8058).
+        // A move takes the file away by itself; a copy leaves ours behind, deleted a minute later.
+        remove(item, deleteFile: false)
+        if item.owned, !operation.contains(.move) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 60) { [weak self] in
+                MainActor.assumeIsolated { self?.deleteOwned(item) }
+            }
+        }
     }
 
     /// A drop on the Delete zone. The only thing that can be dragged there is a shelf item.
@@ -162,30 +193,47 @@ final class ShelfStore: ObservableObject {
 
         if has(.fileURL) {
             _ = p.loadObject(ofClass: URL.self) { url, _ in if let url, url.isFileURL { add(url, false) } }
-        } else if let type = firstType(.image) ?? (has(.url) || has(.plainText) ? nil : firstType(.data)) {
-            // Real data and file promises alike: the provider hands over a temporary file to copy.
-            let suggested = p.suggestedName
-            _ = p.loadFileRepresentation(forTypeIdentifier: type) { tmp, _ in
-                guard let tmp else { return }
-                var name = suggested ?? tmp.lastPathComponent
-                if (name as NSString).pathExtension.isEmpty, let ext = UTType(type)?.preferredFilenameExtension { name += ".\(ext)" }
-                if let dest = AppFiles.unique(name, in: storage), (try? FileManager.default.copyItem(at: tmp, to: dest)) != nil {
+            return
+        }
+
+        // Things with no file behind them (a dragged link, selected text) are saved as a file.
+        let isLink = has(.url), isText = has(.plainText)
+        let saveLinkOrText = {
+            if isLink {
+                _ = p.loadObject(ofClass: URL.self) { url, _ in
+                    guard let url, let dest = AppFiles.unique((url.host() ?? "link") + ".webloc", in: storage),
+                          let data = try? PropertyListSerialization.data(fromPropertyList: ["URL": url.absoluteString], format: .xml, options: 0),
+                          (try? data.write(to: dest, options: .withoutOverwriting)) != nil else { return }
+                    add(dest, true)
+                }
+            } else if isText {
+                _ = p.loadObject(ofClass: String.self) { text, _ in
+                    guard let text, !text.isEmpty else { return }
+                    let title = text.split(whereSeparator: \.isNewline).first.map { String($0.prefix(40)) } ?? "text"
+                    guard let dest = AppFiles.unique(AppFiles.safeName(title, fallback: "text") + ".txt", in: storage),
+                          (try? Data(text.utf8).write(to: dest, options: .withoutOverwriting)) != nil else { return }
                     add(dest, true)
                 }
             }
-        } else if has(.url) {
-            _ = p.loadObject(ofClass: URL.self) { url, _ in
-                guard let url, let dest = AppFiles.unique((url.host() ?? "link") + ".webloc", in: storage),
-                      let data = try? PropertyListSerialization.data(fromPropertyList: ["URL": url.absoluteString], format: .xml, options: 0),
-                      (try? data.write(to: dest, options: .withoutOverwriting)) != nil else { return }
-                add(dest, true)
-            }
-        } else if has(.plainText) {
-            _ = p.loadObject(ofClass: String.self) { text, _ in
-                guard let text, !text.isEmpty else { return }
-                let title = text.split(whereSeparator: \.isNewline).first.map { String($0.prefix(40)) } ?? "text"
-                guard let dest = AppFiles.unique(AppFiles.safeName(title, fallback: "text") + ".txt", in: storage),
-                      (try? Data(text.utf8).write(to: dest, options: .withoutOverwriting)) != nil else { return }
+        }
+
+        // A file dragged from Finder often arrives as its content type (a PDF, an image, plain
+        // text) with no file URL. Asked for in place, the provider hands over the original itself:
+        // that one is referenced like any other file, so dragging it out moves the original and
+        // nothing is duplicated. Anything else comes as a temporary file, which is copied in,
+        // unless it is a link or text, which are saved under a name of their own.
+        let image = firstType(.image)
+        guard let type = image ?? firstType(.data) else { saveLinkOrText(); return }
+        let copiesFile = image != nil || !(isLink || isText)
+        let suggested = p.suggestedName
+        _ = p.loadInPlaceFileRepresentation(forTypeIdentifier: type) { tmp, inPlace, _ in
+            Log.shelf.info("file representation inPlace=\(inPlace, privacy: .public)")
+            if let tmp, inPlace { add(tmp, false); return }
+            guard copiesFile else { saveLinkOrText(); return }
+            guard let tmp else { return }
+            var name = suggested ?? tmp.lastPathComponent
+            if (name as NSString).pathExtension.isEmpty, let ext = UTType(type)?.preferredFilenameExtension { name += ".\(ext)" }
+            if let dest = AppFiles.unique(name, in: storage), (try? FileManager.default.copyItem(at: tmp, to: dest)) != nil {
                 add(dest, true)
             }
         }

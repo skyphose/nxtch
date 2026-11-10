@@ -17,6 +17,30 @@ the name is "no notch" with the o knocked out.
 - you need rich text out of your clipboard history. it keeps plain text, images and file references.
 - you dont want an app that leans on private api. now playing uses apple's `MediaRemote` framework through `osascript`, and a future macos can break it.
 
+## install
+
+needs full xcode installed and opened once (it asks you to accept its license). then:
+
+```bash
+git clone https://github.com/skyphose/nxtch.git ~/nxtch && ~/nxtch/build.sh --install
+```
+
+that builds nxtch from source on your mac, copies it to /Applications and starts it. nothing is downloaded but the source. since you built it yourself, gatekeeper has nothing to quarantine, so theres no "unidentified developer" warning. ive only run this install on my own mac.
+
+| | |
+| --- | --- |
+| update | `cd ~/nxtch && git pull && ./build.sh --install` |
+| uninstall | `~/nxtch/build.sh --uninstall`, then delete `~/nxtch` |
+| run without installing | `./build.sh --run` |
+
+uninstall quits nxtch, turns off launch at login, and removes the app, its settings, the shelf and the clipboard history in `~/Library/Application Support/nxtch`, and its audio and accessibility permissions. files you dropped on the shelf from elsewhere are only referenced, so those stay where they were.
+
+### signing
+
+`build.sh` signs with your apple development certificate if you have a valid one. a free apple id is enough: sign in under xcode > settings > accounts. check it took with `security find-identity -v -p codesigning`. if that says 0 valid identities, install apple's "worldwide developer relations - g3" intermediate from apple.com/certificateauthority - xcode didnt add it on my mac. with that, macos keeps the audio and accessibility grants across rebuilds. without one it signs ad hoc, and macos asks again after every update. set `SIGN_ID` to pick a specific identity.
+
+ad hoc has a cost beyond the nagging: you get used to re-approving audio and accessibility. only approve those prompts right after an update you ran yourself. if one shows up out of nowhere, something replaced the app, so deny it.
+
 ## using it
 
 | | |
@@ -32,10 +56,12 @@ whats playing (title, artist, progress, the app its in) with previous, play/paus
 
 ### shelf
 
-drag anything onto the notch to park it: files, images, links, text. items are temporary. drag one out and drop it somewhere, and it leaves the shelf.
+drag anything onto the notch to park it: files, images, links, text. items are tmeporary. drag one out and drop it somewhere, and it leaves the shelf.
 
-- your files are only referenced, nothing is copied. they copy out by default. hold ⌘ while dropping to move them.
-- text, links, images and file promises (mail, photos, screenshots) get saved in `~/Library/Application Support/nxtch/Shelf`. those move out, so no copy is left behind.
+- **the shelf moves files, it doesnt copy them.** dropping a file on the notch only notes where it is. drag it out into a finder folder and the original moves there from wherever it was. nothing is duplicated, on the shelf or after.
+- hold ⌥ while dropping to copy and leave the original in place. hold ⌘ to insist on a move.
+- the destination does the move, not nxtch. so finder copies instead when the folder is on another disk, and an app that only reads the file (a browser upload, a mail attachment) leaves the original alone.
+- text, links, images and file promises (mail, photos, screenshots) get saved in `~/Library/Application Support/nxtch/Shelf`. those move out, so no copy is left behind. if the place you drop one only takes its path instead of moving or copying it, it stays on the shelf.
 - while you drag an item, a delete square shows up. drop it there to take it off the shelf. your original files are never trashed.
 - double-click opens an item. right-click for open, show in finder, copy, airdrop or delete.
 
@@ -44,21 +70,11 @@ drag anything onto the notch to park it: files, images, links, text. items are t
 press ⌃⌥V anywhere and type to search. ↑/↓ moves the selection, return pastes into the app you were in.
 
 - click a row to copy it. right-click to paste, pin or delete.
-- anything a password manager marks as concealed or transient is never recroded. nothing is recorded while a password manager is the frontmost app either, since not all of them mark their items.
+- anything a password manager marks as concealed or transient is never recroded. nothing is recorded while a password manager is the frontmost app either, since not all of them mark their items. a password copied from a browser extension or a terminal looks like any other text, so that still gets recorded. delete it, or pause recording first.
+- unpinned items are dropped after 7 days.
+- things copied on your iphone (universal clipboard) are not recorded.
 - text is capped at 50,000 characters. images over 20 MB or 50 megapixels are skipped.
 - history lives in `~/Library/Application Support/nxtch/Clipboard`, readable by your user only and kept out of time machine.
-
-## build
-
-```bash
-./build.sh            # builds Nxtch.app in this folder
-./build.sh --run      # builds and launches it
-./build.sh --install  # builds, copies to /Applications and launches from there
-```
-
-`build.sh` runs `swift build` and wraps the binary into an app.
-
-it signs with your apple development certificate if you have a valid one, so macos keeps the audio and accessibility grants across rebuilds. without one it signs ad hoc, and macos asks again after every build. set `SIGN_ID` to pick a specific identity.
 
 ## permissions
 
@@ -67,7 +83,7 @@ it signs with your apple development certificate if you have a valid one, so mac
 | system audio recording | the first time an app plays sound | per-app volume and the meters read each app's audio |
 | accessibility | the first time you paste from clipboard history | return/paste sends ⌘V to the app you were in |
 
-with an ad hoc signature macos may ask again after every rebuild. signing with your own certificate stops that (see build). return only pastes if the app you were in is frontmost again. otherwise the item just stays on the clipboard.
+with an ad hoc signature macos may ask again after every update. signing with your own certificate stops that (see signing). return only pastes if the app you were in is frontmost again. ohterwise the item just stays on the clipboard.
 
 ## how it works
 
@@ -89,7 +105,7 @@ with an ad hoc signature macos may ask again after every rebuild. signing with y
 - signed with hardened runtime, so another process cant inject code into nxtch and borrow its audio or accessibility access.
 - names of dropped files are cleaned before saving. a name cant leave the shelf folder, hide itself or fake its extension with right-to-left characters.
 - files nxtch saves get the quarantine flag, so gatekeeper still checks them when you open one.
-- nxtch only ever deletes files inside its own shelf folder.
+- nxtch only ever deletes files inside its own shelf and clipboard folders, even if its saved lists were edited. when a shelf file moves, the destination moved it. nxtch never moves or deletes your originals itself.
 - now-playing data comes from any app or web page, so its times are clamped before use.
 
 what it costs to run, and what stays out on purpose, is in [SCOPE.md](SCOPE.md).
@@ -113,3 +129,7 @@ Resources/Info.plist
 build.sh
 SCOPE.md
 ```
+
+## license
+
+mit. see [LICENSE](LICENSE).

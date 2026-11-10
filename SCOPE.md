@@ -25,15 +25,15 @@ hard limits. a change that breaks one doesnt ship.
 ### shelf
 
 - drop anything on the notch. files are referenced. text, links, images and file promises are saved.
-- items are temporary. a successful drag out takes them off the shelf. a delete zone shows up while you drag.
+- items are temporary. a successful drag out takes them off the shelf, and moves the original file to where you dropped it (⌥ copies instead). a delete zone shows up while you drag.
 - open, show in finder, copy all, airdrop all, delete, clear.
 - survives a relaunch. files that disappear drop off the shelf.
 
 ### clipboard
 
 - text, images and file references. newest first, pinning, search.
-- 100 unpinned items max. text up to 50,000 characters, one image up to 20 MB and 50 megapixels.
-- skips anything a password manager marks as concealed or transient, and anything copied while one is frontmost.
+- 100 unpinned items max, each kept 7 days. text up to 50,000 characters, one image up to 20 MB and 50 megapixels.
+- skips anything a password manager marks as concealed or transient, anything copied while one is frontmost, and anything arriving from another device.
 - history is readable by your user only and kept out of time machine.
 - one global shortcut (⌃⌥V). click to copy, return to paste.
 
@@ -78,5 +78,5 @@ after the 0.3 cleanup, with zoom holding a silent audio stream open: 0.8% cpu, 1
 
 ### what it still costs
 
-- the closed-notch meter keeps one listen-only tap running while any app outputs audio, even silence from an idle browser tab or a call app. about 2% in `coreaudiod`. turning off "show activity beside notch" removes it.
+- the closed-notch meter keeps one listen-only tap running while any app outputs audio, even silence from an idle browser tab or a call app. about 2% in `coreaudiod`. turning off "activity beside notch" removes it.
 - the now-playing helper (`osascript`) uses about 28 MB and about 0.1% cpu. each playback button press starts a short-lived `osascript`.

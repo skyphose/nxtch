@@ -12,7 +12,7 @@ struct ClipboardTab: View {
         VStack(spacing: 4) {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(.secondary)
-                TextField("", text: $store.query, prompt: Text("Search clipboard  ·  ⌃⌥V").foregroundStyle(.white.opacity(0.35)))
+                TextField("", text: $store.query, prompt: Text("Search").foregroundStyle(.white.opacity(0.35)))
                     .textFieldStyle(.plain)
                     .font(.system(size: 12))
                     .focused($searchFocused)
@@ -30,7 +30,7 @@ struct ClipboardTab: View {
 
             let items = store.visible
             if items.isEmpty {
-                Text(store.query.isEmpty ? "Copy something and it will show up here" : "No matches")
+                Text(store.query.isEmpty ? "Nothing copied yet" : "No matches")
                     .font(.system(size: 12)).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {

@@ -26,7 +26,7 @@ struct MediaTab: View {
             .frame(height: NotchViewModel.sectionLabelHeight)
 
             if model.apps.isEmpty {
-                Text("No apps are playing audio")
+                Text("Nothing playing")
                     .font(.system(size: 12)).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
                     .frame(height: NotchViewModel.rowHeight)
@@ -62,7 +62,6 @@ private struct NowPlayingCard: View {
             .frame(width: 52, height: 52)
             .contentShape(Rectangle())
             .onTapGesture { openSourceApp() }
-            .help("Open \(app?.name ?? "app")")
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(info.title).font(.system(size: 13, weight: .semibold)).lineLimit(1)

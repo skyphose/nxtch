@@ -8,8 +8,7 @@ struct ShelfTab: View {
         if shelf.items.isEmpty {
             VStack(spacing: 6) {
                 Image(systemName: "tray.and.arrow.down").font(.system(size: 22, weight: .light))
-                Text("Drop files, images, links or text on the notch").font(.system(size: 12, weight: .medium))
-                Text("Drag them back out whenever you're ready").font(.system(size: 11)).foregroundStyle(.secondary)
+                Text("Drop here").font(.system(size: 12, weight: .medium))
             }
             .foregroundStyle(.white.opacity(0.75))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -64,7 +63,6 @@ private struct DeleteZone: View {
         .onDrop(of: [.fileURL], isTargeted: $hot) { _ in
             shelf.deleteDragged()
         }
-        .help("Drop here to delete from the shelf (original files are never trashed)")
     }
 }
 
@@ -95,7 +93,6 @@ private struct ShelfTile: View {
         .contentShape(Rectangle())
         // AppKit drag source + click/menu handling, so we learn whether a drag out succeeded.
         .overlay(ShelfDragSource(item: item, shelf: shelf))
-        .help(item.path)
     }
 }
 
@@ -145,10 +142,14 @@ final class ShelfDragSourceView: NSView, NSDraggingSource {
 
     func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
         if context == .withinApplication { return [.copy, .generic] }
-        // Things nxtch saved itself (text, links, images, promises) move out: no original to keep.
-        if item.owned { return [.move, .copy, .generic] }
-        // Your own files copy out by default; hold ⌘ to move them.
-        return NSEvent.modifierFlags.contains(.command) ? [.move] : [.copy, .generic]
+        // The shelf is a file mover: the destination is offered a move first, for your own files
+        // as much as for things nxtch saved. nxtch never moves or deletes an original itself. The
+        // destination does the move, so a target that only reads the file (an upload, an
+        // attachment) takes a copy and the original stays where it was.
+        let flags = NSEvent.modifierFlags
+        if flags.contains(.option) { return [.copy] }    // ⌥: leave the original in place
+        if flags.contains(.command) { return [.move] }   // ⌘: move or nothing
+        return [.move, .copy, .generic]
     }
 
     func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {

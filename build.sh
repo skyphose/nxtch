@@ -1,6 +1,8 @@
 #!/bin/zsh
 # Builds Nxtch.app next to this script.
-# Usage: ./build.sh [--run] [--install]   (--install copies it to /Applications and runs it from there)
+# Usage: ./build.sh [--run] [--install] [--uninstall]
+#   --install    copies it to /Applications and runs it from there
+#   --uninstall  removes the app, its settings, its data and its permissions (builds nothing)
 #
 # Signs with your "Apple Development" certificate when one is valid, so macOS keeps the audio and
 # Accessibility grants across rebuilds. Without one it signs ad hoc, and macOS may ask again after
@@ -8,6 +10,19 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 APP=Nxtch.app
+BUNDLE_ID=dev.nxtch.app
+
+if [[ " $* " == *" --uninstall "* ]]; then
+  # Launch at login is registered against the installed app, so turn it off before removing it.
+  [[ -x "/Applications/$APP/Contents/MacOS/Nxtch" ]] && "/Applications/$APP/Contents/MacOS/Nxtch" --unregister-login-item || true
+  pkill -x Nxtch 2>/dev/null && sleep 1 || true
+  rm -rf "/Applications/$APP" "$APP"
+  rm -rf "$HOME/Library/Application Support/nxtch"
+  defaults delete "$BUNDLE_ID" 2>/dev/null || true
+  tccutil reset All "$BUNDLE_ID" >/dev/null 2>&1 || true
+  echo "Uninstalled nxtch: app, settings, shelf, clipboard history and permissions removed."
+  exit 0
+fi
 
 swift build -c release
 rm -rf "$APP" && mkdir -p "$APP/Contents/MacOS"

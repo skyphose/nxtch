@@ -148,11 +148,11 @@ private struct OpenContent: View {
                 actions
                 Menu {
                     Toggle("Launch at Login", isOn: $settings.launchAtLogin)
-                    Toggle("Show Activity Beside Notch", isOn: $settings.showEars)
-                    Toggle("Show in Full Screen", isOn: $settings.showInFullScreen)
-                    Toggle("Record Clipboard History", isOn: $settings.clipboardEnabled)
+                    Toggle("Activity Beside Notch", isOn: $settings.showEars)
+                    Toggle("Full Screen", isOn: $settings.showInFullScreen)
+                    Toggle("Clipboard History", isOn: $settings.clipboardEnabled)
                     Divider()
-                    Button("Quit nxtch") { NSApp.terminate(nil) }
+                    Button("Quit") { NSApp.terminate(nil) }
                 } label: {
                     Image(systemName: "gearshape.fill").font(.system(size: 11, weight: .semibold))
                 }
@@ -180,13 +180,13 @@ private struct OpenContent: View {
         case .media: EmptyView()
         case .shelf:
             if !shelf.isEmpty {
-                iconButton("square.and.arrow.up", "AirDrop all") { shelf.airDrop() }
-                iconButton("doc.on.doc", "Copy all (paste in Finder)") { shelf.copyToClipboard() }
-                iconButton("trash", "Delete all from shelf") { shelf.clear() }
+                iconButton("square.and.arrow.up", "AirDrop") { shelf.airDrop() }
+                iconButton("doc.on.doc", "Copy") { shelf.copyToClipboard() }
+                iconButton("trash", "Clear") { shelf.clear() }
             }
         case .clipboard:
             if !clipboard.items.isEmpty {
-                iconButton("trash", "Clear history (keeps pinned)") { clipboard.clear() }
+                iconButton("trash", "Clear") { clipboard.clear() }
             }
         }
     }
