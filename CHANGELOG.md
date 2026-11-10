@@ -2,11 +2,14 @@
 
 newest first. every version is a git tag, so `git checkout v0.3.0` gets you that build.
 
-## unreleased
+## 0.5.1 - 2026-11-10
+
+shelf ticks instead of modifier clicks, two media fixes, a lighter internal wiring, and screenshots.
 
 - shelf: a circle on each tile ticks it for a multi-drag, replacing ⌘-click and ⇧-click. clicking a tile in the new grid was clearing the selection on mouse up.
 - media: the play button goes back to the real state if the app ignored the press. the meter beside the closed notch follows a new now-playing app right away, not up to 5 s later.
 - cleanup: plain callbacks instead of combine pipelines, one save when several shelf items go at once, shelf thumbnails freed with their items, a copied image read off the pasteboard once.
+- readme: screenshots of the closed notch and all three tabs.
 
 ## 0.5.0 - 2026-11-10
 
