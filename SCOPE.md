@@ -28,7 +28,7 @@ hard limits. a change that breaks one doesnt ship.
 
 - drop anything on the notch. files are referenced. text, links, images and file promises are saved.
 - items are temporary. a successful drag out takes them off the shelf, and moves the original file to where you dropped it (⌥ copies instead). a delete zone shows up while you drag.
-- select one or several (⌘-click, ⇧-click, or the select-all check mark) and drag them out together.
+- tick one or several (a circle on each tile, or the check mark for all) and drag them out together.
 - grows down a row at a time, four tiles a row, up to three rows, then scrolls.
 - open, show in finder, copy, airdrop, delete, clear. they act on the selection, or on everything without one.
 - survives a relaunch. files that disappear drop off the shelf.

@@ -31,8 +31,6 @@ struct ShelfTab: View {
                     }
                     .padding(.vertical, 8)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                    .onTapGesture { shelf.clearSelection() }   // a click beside the tiles
                 }
                 if shelf.isDragging {
                     DeleteZone(shelf: shelf)
@@ -102,8 +100,17 @@ private struct ShelfTile: View {
             .fill(selected ? Color.accentColor.opacity(0.35) : .white.opacity(0.06)))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
             .strokeBorder(Color.accentColor.opacity(selected ? 0.9 : 0), lineWidth: 1.5))
+        .overlay(alignment: .topLeading) {
+            if shelf.showsTicks {
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(selected ? Color.accentColor : .white.opacity(0.5))
+                    .padding(6)
+            }
+        }
         .contentShape(Rectangle())
         // AppKit drag source + click/menu handling, so we learn whether a drag out succeeded.
+        // It also takes clicks on the tick circle above.
         .overlay(ShelfDragSource(item: item, shelf: shelf))
     }
 }
@@ -131,29 +138,26 @@ final class ShelfDragSourceView: NSView, NSDraggingSource {
     var item: ShelfItem!
     weak var shelf: ShelfStore?
     private var mouseDownEvent: NSEvent?
-    /// A plain click on an already selected tile narrows the selection to it, but only on mouse
-    /// up: on mouse down it may be the start of dragging the whole selection.
-    private var narrowOnMouseUp = false
     private var dragged: [ShelfItem] = []
+    /// Where ShelfTile draws the tick circle: the tile's top-left corner.
+    private static let tickArea = NSRect(x: 0, y: 0, width: 30, height: 30)
 
+    override var isFlipped: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
+    /// A click on the tick circle ticks or unticks the tile. Anywhere else, a press may start a
+    /// drag, and a double click opens the item.
     override func mouseDown(with event: NSEvent) {
         guard let shelf else { return }
+        if shelf.showsTicks, Self.tickArea.contains(convert(event.locationInWindow, from: nil)) {
+            shelf.toggle(item)
+            return
+        }
         mouseDownEvent = event
-        narrowOnMouseUp = false
-        let flags = event.modifierFlags
-        if flags.contains(.command) { shelf.select(item, toggle: true) }
-        else if flags.contains(.shift) { shelf.select(item, extend: true) }
-        else if shelf.selection.contains(item.id) { narrowOnMouseUp = true }
-        else { shelf.select(item) }
         if event.clickCount == 2 { shelf.open(item) }
     }
 
-    override func mouseUp(with event: NSEvent) {
-        if narrowOnMouseUp, mouseDownEvent != nil { shelf?.select(item) }
-        mouseDownEvent = nil
-    }
+    override func mouseUp(with event: NSEvent) { mouseDownEvent = nil }
 
     override func mouseDragged(with event: NSEvent) {
         guard let down = mouseDownEvent, let shelf else { return }
@@ -164,7 +168,7 @@ final class ShelfDragSourceView: NSView, NSDraggingSource {
             let d = NSDraggingItem(pasteboardWriter: it.url as NSURL)
             let image = shelf.thumbnails[it.id] ?? NSWorkspace.shared.icon(forFile: it.path)
             let o = CGFloat(min(i, 4)) * 6   // fan the pile out a little
-            d.setDraggingFrame(NSRect(x: p.x - 24 + o, y: p.y - 24 - o, width: 48, height: 48), contents: image)
+            d.setDraggingFrame(NSRect(x: p.x - 24 + o, y: p.y - 24 + o, width: 48, height: 48), contents: image)
             return d
         }
         shelf.beginDrag(dragged)
@@ -190,8 +194,7 @@ final class ShelfDragSourceView: NSView, NSDraggingSource {
 
     override func menu(for event: NSEvent) -> NSMenu? {
         guard let shelf, let item else { return nil }
-        // Right-clicking outside the selection acts on that tile alone, as in Finder.
-        if !shelf.selection.contains(item.id) { shelf.select(item) }
+        // An unticked tile's menu acts on that tile alone, a ticked one's on every ticked tile.
         let group = shelf.group(of: item)
         let menu = NSMenu()
         let entries: [(String, () -> Void)] = [

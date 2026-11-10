@@ -18,10 +18,8 @@ struct ShelfItem: Identifiable, Codable, Equatable {
 final class ShelfStore: ObservableObject {
     @Published private(set) var items: [ShelfItem] = []
     @Published private(set) var thumbnails: [UUID: NSImage] = [:]
-    /// Selected tiles. Click selects one, ⌘-click adds or removes one, ⇧-click selects a range.
+    /// Ticked tiles: each tile's circle, or the check mark button for all of them.
     @Published private(set) var selection: Set<UUID> = []
-    /// Where a ⇧-click range starts.
-    private var anchor: UUID?
     /// The items being dragged out of the shelf (shows the Delete zone).
     @Published private(set) var dragging: Set<UUID> = []
     /// A drag is over the Delete zone.
@@ -105,27 +103,17 @@ final class ShelfStore: ObservableObject {
 
     // MARK: Selection
 
-    func select(_ item: ShelfItem, toggle: Bool = false, extend: Bool = false) {
-        if extend, let a = items.firstIndex(where: { $0.id == anchor }), let b = items.firstIndex(where: { $0.id == item.id }) {
-            selection = Set(items[min(a, b)...max(a, b)].map(\.id))
-            return
-        }
-        if toggle {
-            if selection.remove(item.id) == nil { selection.insert(item.id) }
-        } else {
-            selection = [item.id]
-        }
-        anchor = item.id
-    }
+    /// Tiles only get a tick circle when there is more than one.
+    var showsTicks: Bool { items.count > 1 }
 
-    func clearSelection() { selection = []; anchor = nil }
+    func toggle(_ item: ShelfItem) {
+        if selection.remove(item.id) == nil { selection.insert(item.id) }
+    }
 
     var allSelected: Bool { !items.isEmpty && selection.count == items.count }
 
     /// The check mark button: selects everything, or clears the selection when everything already is.
-    func toggleSelectAll() {
-        if allSelected { clearSelection() } else { selection = Set(items.map(\.id)); anchor = items.first?.id }
-    }
+    func toggleSelectAll() { selection = allSelected ? [] : Set(items.map(\.id)) }
 
     /// Drops items whose files were moved or deleted elsewhere.
     func prune() {
