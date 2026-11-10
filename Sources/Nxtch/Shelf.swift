@@ -72,6 +72,8 @@ final class ShelfStore: ObservableObject {
     private var droppedInternally = false
 
     private let storage = AppFiles.dir("Shelf")
+    /// Largest thing nxtch will copy into its own storage. Files it only references have no limit.
+    nonisolated static let maxCopiedBytes = 1 << 30
 
     init() {
         if let data = UserDefaults.standard.data(forKey: "shelfItems"),
@@ -115,6 +117,9 @@ final class ShelfStore: ObservableObject {
     /// Deletes files left in nxtch's storage that no shelf item points at (nxtch quit before a
     /// dragged-out copy was cleaned up).
     private func sweep() {
+        // Never through a symlink: if the folder were swapped for a link to somewhere else, this
+        // would empty that place instead.
+        guard (try? FileManager.default.attributesOfItem(atPath: storage.path))?[.type] as? FileAttributeType == .typeDirectory else { return }
         let kept = Set(items.map(\.url.standardizedFileURL.path))
         let files = (try? FileManager.default.contentsOfDirectory(at: storage, includingPropertiesForKeys: nil)) ?? []
         for f in files where !kept.contains(f.standardizedFileURL.path) { try? FileManager.default.removeItem(at: f) }
@@ -272,6 +277,11 @@ final class ShelfStore: ObservableObject {
             if let tmp, inPlace { add(tmp, false); return }
             guard copiesFile else { saveLinkOrText(); return }
             guard let tmp else { return }
+            // A copy this big is almost certainly a mistake, and would fill the disk quietly.
+            if let size = (try? tmp.resourceValues(forKeys: [.fileSizeKey]))?.fileSize, size > ShelfStore.maxCopiedBytes {
+                Log.shelf.info("drop skipped: over the size limit for copied items")
+                return
+            }
             var name = suggested ?? tmp.lastPathComponent
             if (name as NSString).pathExtension.isEmpty, let ext = UTType(type)?.preferredFilenameExtension { name += ".\(ext)" }
             if let dest = AppFiles.unique(name, in: storage), (try? FileManager.default.copyItem(at: tmp, to: dest)) != nil {

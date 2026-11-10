@@ -74,7 +74,7 @@ the shelf MOVES files. it doesnt copy them. dropping a file on the notch only no
 - click a tile to select it. ⌘-click adds or removes one, ⇧-click selects a range. drag any selected tile and they all go together. the check mark button selects everything. the buttons and the right-click menu act on the selection.
 - hold ⌥ while dropping to copy and leave the original in place. hold ⌘ to insist on a move.
 - the destination does the move, not nxtch. an app that only reads the file (a browser upload, a mail attachment) leaves the original alone. finder should copy instead when the folder is on another disk. untested, i only tried one disk.
-- text, links, images and file promises (mail, photos, screenshots) get saved in `~/Library/Application Support/nxtch/Shelf`. those move out, so no copy is left behind. if the place you drop one only takes its path instead of moving or copying it, it stays on the shelf.
+- text, links, images and file promises (mail, photos, screenshots) get saved in `~/Library/Application Support/nxtch/Shelf`. those move out, so no copy is left behind. anything over 1 GB is skipped. files nxtch only references have no limit. if the place you drop one only takes its path instead of moving or copying it, it stays on the shelf.
 - while you drag an item, a delete square shows up. drop it there to take it off the shelf. your original files are never trashed.
 - double-click opens an item. right-click for open, show in finder, copy, airdrop or delete.
 
