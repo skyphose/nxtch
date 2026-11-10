@@ -65,7 +65,7 @@ private struct NowPlayingCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(info.title).font(.system(size: 13, weight: .semibold)).lineLimit(1)
-                    LevelMeter(state: info.isPlaying ? meter : nil, color: .white.opacity(0.9))
+                    LevelMeter(state: info.isPlaying ? meter : nil, colors: app?.meterColors ?? [.white])
                         .frame(width: 12, height: 10)
                 }
                 if let subtitle = [info.artist, info.album].compactMap({ $0 }).filter({ !$0.isEmpty }).first {
@@ -147,6 +147,11 @@ private struct AppRow: View {
     @ObservedObject var model: MixerModel
     let media: NowPlayingInfo?
 
+    /// The slider sticks to 100% as it passes. Holding ⇧ turns that off, so any value can be set.
+    private func adjust(to value: Double) {
+        model.setVolume(app.id, Float(value), snap: !NSEvent.modifierFlags.contains(.shift))
+    }
+
     var body: some View {
         let muted = model.isMuted(app.id)
         let volume = model.volume(app.id)
@@ -163,12 +168,11 @@ private struct AppRow: View {
                     }
                     Spacer(minLength: 4)
                     if app.isPlaying {
-                        LevelMeter(state: muted ? nil : model.meter(app.id), color: .green)
+                        LevelMeter(state: muted ? nil : model.meter(app.id), colors: app.meterColors)
                             .frame(width: 12, height: 9)
                     }
                 }
-                Slider(value: Binding(get: { Double(muted ? 0 : volume) },
-                                      set: { model.setVolume(app.id, Float($0)) }),
+                Slider(value: Binding(get: { Double(muted ? 0 : volume) }, set: { adjust(to: $0) }),
                        in: 0...Double(MixerModel.maxVolume))
                     .controlSize(.mini)
                     .tint(volume > 1.001 && !muted ? .orange : .white)

@@ -54,6 +54,10 @@ ad hoc has a cost beyond the nagging: you get used to re-approving audio and acc
 
 whats playing (title, artist, progress, the app its in) with previous, play/pause and next. below that, one row per app making sound: volume 0 - 150%, mute, and a live level meter.
 
+- a slider sticks to 100% as it passes, within 2%. hold ⇧ while dragging to turn that off.
+- the reset button (top right of the media tab, when any app is muted or off 100%) puts every app back to 100%.
+- closed, the notch shows an icon for every app making sound on its left, up to four, and one level meter on its right. the meter takes its colour from the icons of whats playing: green for spotify, orange for firefox, a fade from one to the other with both, and a wheel of all of them with three or more.
+
 ### shelf
 
 drag anything onto the notch to park it: files, images, links, text. items are tmeporary. drag one out and drop it somewhere, and it leaves the shelf.
@@ -127,6 +131,8 @@ Sources/Nxtch/
   Shelf.swift         shelf store: safe file names, drops, thumbnails
   Clipboard.swift     clipboard history store
 Resources/Info.plist
+Resources/AppIcon.icns       the app icon
+Resources/make-icon.swift    draws it
 build.sh
 SCOPE.md
 ```

@@ -80,8 +80,17 @@ final class NotchViewModel: ObservableObject {
         tab = NotchTab(rawValue: UserDefaults.standard.string(forKey: "tab") ?? "") ?? .media
     }
 
-    func closedSize(ears: Bool) -> CGSize {
-        CGSize(width: geometry.notchSize.width + (ears ? Self.earWidth * 2 : 0), height: geometry.notchSize.height)
+    static let earIcon: CGFloat = 18
+    static let earIconGap: CGFloat = 3
+    static let maxEarIcons = 4
+
+    /// The left ear grows with the number of playing apps (up to `maxEarIcons`).
+    static func leftEarWidth(icons: Int) -> CGFloat {
+        earWidth + CGFloat(max(0, min(icons, maxEarIcons) - 1)) * (earIcon + earIconGap)
+    }
+
+    func closedSize(leftEar: CGFloat, rightEar: CGFloat) -> CGSize {
+        CGSize(width: geometry.notchSize.width + leftEar + rightEar, height: geometry.notchSize.height)
     }
 
     func openSize(rows: Int, nowPlaying: Bool) -> CGSize {
@@ -198,10 +207,7 @@ final class NotchController {
 
         // Hover and drag detection: reading the cursor position is trivial, and unlike event
         // monitors it also works while another app's menu is open or during a drag.
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.trackMouse() }
-        }
-        pollTimer?.tolerance = 0.03
+        pollTimer = .repeating(0.1, tolerance: 0.03) { [weak self] in self?.trackMouse() }
 
         // ⌃⌥V: open the clipboard from anywhere.
         hotkey = Hotkey(keyCode: kVK_ANSI_V, modifiers: controlKey | optionKey) { [weak self] in
@@ -364,6 +370,7 @@ final class NotchController {
         Log.notch.info("\(open ? "opened" : "closed", privacy: .public) reason=\(reason, privacy: .public) tab=\(self.vm.tab.rawValue, privacy: .public) key=\(self.panel.isKeyWindow, privacy: .public)")
         if open {
             shelf.prune()
+            clipboard.expire()
             clipboard.pasteTarget = NSWorkspace.shared.frontmostApplication?.processIdentifier
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
         } else {

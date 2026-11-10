@@ -85,7 +85,7 @@ final class ShelfStore: ObservableObject {
 
     var isEmpty: Bool { items.isEmpty }
 
-    func add(_ url: URL, owned: Bool = false) {
+    func add(_ url: URL, owned: Bool) {
         guard FileManager.default.fileExists(atPath: url.path) else { return }
         items.removeAll { $0.path == url.path }
         let item = ShelfItem(id: UUID(), path: url.path, owned: owned)
@@ -165,13 +165,13 @@ final class ShelfStore: ObservableObject {
     func open(_ item: ShelfItem) { NSWorkspace.shared.open(item.url) }
 
     /// Puts the files on the clipboard: paste in Finder to copy them, ⌥⌘V to move them.
-    func copyToClipboard(_ items: [ShelfItem]? = nil) {
+    func copyToClipboard(_ items: [ShelfItem]) {
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.writeObjects((items ?? self.items).map { $0.url as NSURL })
+        NSPasteboard.general.writeObjects(items.map { $0.url as NSURL })
     }
 
-    func airDrop(_ items: [ShelfItem]? = nil) {
-        NSSharingService(named: .sendViaAirDrop)?.perform(withItems: (items ?? self.items).map(\.url))
+    func airDrop(_ items: [ShelfItem]) {
+        NSSharingService(named: .sendViaAirDrop)?.perform(withItems: items.map(\.url))
     }
 
     // MARK: Dragging out
@@ -198,9 +198,7 @@ final class ShelfStore: ObservableObject {
         // A move takes the file away by itself; a copy leaves ours behind, deleted a minute later.
         remove(item, deleteFile: false)
         if item.owned, !operation.contains(.move) {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 60) { [weak self] in
-                MainActor.assumeIsolated { self?.deleteOwned(item) }
-            }
+            after(60) { [weak self] in self?.deleteOwned(item) }
         }
     }
 
@@ -227,7 +225,7 @@ final class ShelfStore: ObservableObject {
     }
 
     private nonisolated func ingest(_ p: NSItemProvider) {
-        let storage = AppFiles.dir("Shelf")
+        let storage = self.storage
         let add: @Sendable (URL, Bool) -> Void = { url, owned in
             DispatchQueue.main.async { MainActor.assumeIsolated { self.add(url, owned: owned) } }
         }

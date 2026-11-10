@@ -39,6 +39,24 @@ MainActor.assumeIsolated {
     app.run()
 }
 
+// MARK: Main-thread timing
+
+/// Runs `body` on the main actor after `delay` seconds.
+@MainActor
+func after(_ delay: TimeInterval, _ body: @escaping @MainActor () -> Void) {
+    DispatchQueue.main.asyncAfter(deadline: .now() + delay) { MainActor.assumeIsolated(body) }
+}
+
+extension Timer {
+    /// A repeating main-thread timer. The tolerance lets macOS batch wakeups.
+    @MainActor
+    static func repeating(_ interval: TimeInterval, tolerance: TimeInterval, _ body: @escaping @MainActor () -> Void) -> Timer {
+        let t = scheduledTimer(withTimeInterval: interval, repeats: true) { _ in MainActor.assumeIsolated(body) }
+        t.tolerance = tolerance
+        return t
+    }
+}
+
 // MARK: Settings
 
 @MainActor

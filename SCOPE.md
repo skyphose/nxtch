@@ -21,6 +21,8 @@ hard limits. a change that breaks one doesnt ship.
 
 - now playing: title, artist, progress, the source app's icon, previous / play-pause / next. no permission needed.
 - per-app volume 0 - 150%, mute, live level meters. follows the default output device.
+- sliders stick to 100%, ⇧ turns that off. one button resets every app to 100%.
+- closed: an icon for every playing app on the left (up to four), one meter on the right.
 
 ### shelf
 

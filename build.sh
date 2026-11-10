@@ -25,9 +25,10 @@ if [[ " $* " == *" --uninstall "* ]]; then
 fi
 
 swift build -c release
-rm -rf "$APP" && mkdir -p "$APP/Contents/MacOS"
+rm -rf "$APP" && mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$(swift build -c release --show-bin-path)/Nxtch" "$APP/Contents/MacOS/Nxtch"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
 SIGN_ID=${SIGN_ID:-$(security find-identity -v -p codesigning | awk -F'"' '/Apple Development/ {print $2; exit}')}
 # Hardened runtime blocks DYLD_INSERT_LIBRARIES injection into nxtch and its permissions.

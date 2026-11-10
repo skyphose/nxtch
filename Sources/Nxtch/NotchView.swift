@@ -43,10 +43,15 @@ struct NotchView: View {
     private var bottomRadius: CGFloat { vm.isOpen ? 24 : 12 }
     private var earsVisible: Bool { settings.showEars && (model.anyPlaying || !shelf.isEmpty) }
 
+    /// The left ear holds an icon per playing app, the right ear one meter. The ears can differ
+    /// in width, so the closed shape is shifted to keep the hardware notch in its middle.
+    private var leftEar: CGFloat { earsVisible ? NotchViewModel.leftEarWidth(icons: model.playingApps.count) : 0 }
+    private var rightEar: CGFloat { earsVisible ? NotchViewModel.earWidth : 0 }
+
     var body: some View {
         let size = vm.isOpen
             ? vm.openSize(rows: model.apps.count, nowPlaying: nowPlaying.info != nil)
-            : vm.closedSize(ears: earsVisible)
+            : vm.closedSize(leftEar: leftEar, rightEar: rightEar)
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
                 if vm.isOpen {
@@ -56,7 +61,7 @@ struct NotchView: View {
                         .padding(.bottom, 10)
                         .transition(.opacity.combined(with: .scale(scale: 0.92, anchor: .top)))
                 } else {
-                    ClosedContent(vm: vm, model: model, nowPlaying: nowPlaying, shelf: shelf, showEars: earsVisible)
+                    ClosedContent(vm: vm, model: model, shelf: shelf, showEars: earsVisible, leftEar: leftEar)
                         .transition(.opacity)
                 }
             }
@@ -74,10 +79,11 @@ struct NotchView: View {
                 vm.tab = .shelf
                 return shelf.handleDrop(providers)
             }
+            .offset(x: vm.isOpen ? 0 : (rightEar - leftEar) / 2)
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .animation(.spring(response: 0.42, dampingFraction: 0.82), value: earsVisible)
+        .animation(.spring(response: 0.42, dampingFraction: 0.82), value: leftEar + rightEar)
         .animation(.spring(response: 0.42, dampingFraction: 0.82), value: model.apps.count)
         .animation(.spring(response: 0.42, dampingFraction: 0.82), value: nowPlaying.info != nil)
         .animation(.spring(response: 0.38, dampingFraction: 0.85), value: vm.tab)
@@ -90,19 +96,24 @@ struct NotchView: View {
 private struct ClosedContent: View {
     @ObservedObject var vm: NotchViewModel
     @ObservedObject var model: MixerModel
-    @ObservedObject var nowPlaying: NowPlayingMonitor
     @ObservedObject var shelf: ShelfStore
     let showEars: Bool
+    let leftEar: CGFloat
 
     var body: some View {
         HStack(spacing: 0) {
             if showEars {
                 if let owner = model.primaryApp {
-                    Image(nsImage: owner.icon).resizable().interpolation(.high)
-                        .frame(width: 18, height: 18)
-                        .frame(width: NotchViewModel.earWidth)
+                    // Every playing app on the left, the meter's app first. One meter on the right.
+                    HStack(spacing: NotchViewModel.earIconGap) {
+                        ForEach(model.playingApps.prefix(NotchViewModel.maxEarIcons)) { app in
+                            Image(nsImage: app.icon).resizable().interpolation(.high)
+                                .frame(width: NotchViewModel.earIcon, height: NotchViewModel.earIcon)
+                        }
+                    }
+                    .frame(width: leftEar)
                     Spacer(minLength: vm.geometry.notchSize.width)
-                    LevelMeter(state: model.meter(owner.id), color: .white.opacity(0.9))
+                    LevelMeter(state: model.meter(owner.id), colors: model.playingColors)
                         .frame(width: 16, height: 14)
                         .frame(width: NotchViewModel.earWidth)
                 } else if !shelf.isEmpty {
@@ -177,7 +188,10 @@ private struct OpenContent: View {
 
     @ViewBuilder private var actions: some View {
         switch vm.tab {
-        case .media: EmptyView()
+        case .media:
+            if model.hasCustomLevels {
+                iconButton("arrow.counterclockwise", "Reset All to 100%") { model.resetAll() }
+            }
         case .shelf:
             if !shelf.isEmpty {
                 iconButton(shelf.allSelected ? "checkmark.circle.fill" : "checkmark.circle",
@@ -204,27 +218,31 @@ private struct OpenContent: View {
     }
 }
 
-/// Four bars driven by the real audio: low, low-mid, high-mid, high.
+/// Four bars driven by the real audio: low, low-mid, high-mid, high. The bars are filled with a
+/// left-to-right fade through `colors`.
 ///
 /// Drawn with plain CALayers on its own timer rather than a SwiftUI TimelineView: animating
 /// through SwiftUI re-lays-out the whole hosting view every frame (~10% CPU for one meter).
 /// Runs at 30 fps while there's sound and drops to 4 fps during silence.
 struct LevelMeter: NSViewRepresentable {
     let state: TapState?
-    var color: Color
+    var colors: [NSColor]
 
     func makeNSView(context: Context) -> MeterView { MeterView() }
 
     func updateNSView(_ view: MeterView, context: Context) {
-        view.color = NSColor(color)
+        if view.colors != colors { view.colors = colors }
         if view.state !== state { view.state = state }
     }
 }
 
 final class MeterView: NSView {
     var state: TapState? { didSet { updateTimer() } }
-    var color: NSColor = .white { didSet { bars.forEach { $0.backgroundColor = color.cgColor } } }
+    var colors: [NSColor] = [.white] { didSet { applyColors() } }
 
+    /// The fade, shown only where the bars are: the bars live in its mask.
+    private let gradient = CAGradientLayer()
+    private let mask = CALayer()
     private var bars: [CALayer] = []
     private var timer: Timer?
     private var interval: TimeInterval = 0
@@ -236,19 +254,32 @@ final class MeterView: NSView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
+        gradient.mask = mask
+        layer?.addSublayer(gradient)
         for _ in 0..<TapState.bandCount {
             let bar = CALayer()
-            bar.backgroundColor = color.cgColor
-            bar.actions = ["bounds": NSNull(), "position": NSNull(), "frame": NSNull()]
-            layer?.addSublayer(bar)
+            bar.backgroundColor = .white   // only its shape matters: it is a mask
+            mask.addSublayer(bar)
             bars.append(bar)
         }
+        applyColors()
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
     override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); updateTimer() }
     override func layout() { super.layout(); drawBars() }
+
+    /// One or two colours fade left to right. Three or more go round the centre like a colour
+    /// wheel, so each of them shows up in a meter this small.
+    private func applyColors() {
+        let c = colors.isEmpty ? [NSColor.white] : colors
+        let wheel = c.count >= 3
+        gradient.type = wheel ? .conic : .axial
+        gradient.startPoint = wheel ? CGPoint(x: 0.5, y: 0.5) : CGPoint(x: 0, y: 0.5)
+        gradient.endPoint = wheel ? CGPoint(x: 0.5, y: 0) : CGPoint(x: 1, y: 0.5)
+        gradient.colors = (wheel ? c + [c[0]] : c.count == 1 ? [c[0], c[0]] : c).map(\.cgColor)
+    }
 
     private func updateTimer() {
         if window != nil && state != nil {
@@ -285,6 +316,8 @@ final class MeterView: NSView {
         let w = (bounds.width - gap * (n - 1)) / n
         CATransaction.begin()
         CATransaction.setDisableActions(true)
+        gradient.frame = bounds
+        mask.frame = bounds
         for (i, bar) in bars.enumerated() {
             let h = max(w, bounds.height * CGFloat(i < levels.count ? levels[i] : 0))
             bar.frame = CGRect(x: CGFloat(i) * (w + gap), y: (bounds.height - h) / 2, width: w, height: h)

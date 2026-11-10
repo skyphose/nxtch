@@ -83,7 +83,7 @@ final class NowPlayingMonitor: ObservableObject {
                     guard let self else { return }
                     // Restart, backing off if it keeps dying right away.
                     self.restartDelay = Date().timeIntervalSince(started) > 60 ? 2 : min(self.restartDelay * 2, 300)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + self.restartDelay) { MainActor.assumeIsolated { self.launch() } }
+                    after(self.restartDelay) { self.launch() }
                 }
             }
         }

@@ -84,11 +84,8 @@ final class ClipboardStore: ObservableObject {
             // The file could have been edited: an image name must be one nxtch made itself.
             items = saved.filter { $0.imageFile == nil || imageURL($0.imageFile) != nil }
         }
-        if trim() { save() }
-        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.poll() }
-        }
-        timer?.tolerance = 0.2
+        expire()
+        timer = .repeating(0.5, tolerance: 0.2) { [weak self] in self?.poll() }
     }
 
     /// Pinned first, then newest first, filtered by the search query.
@@ -136,9 +133,7 @@ final class ClipboardStore: ObservableObject {
             save()
         }
         justCopied = item.id
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
-            MainActor.assumeIsolated { if self?.justCopied == item.id { self?.justCopied = nil } }
-        }
+        after(1.2) { [weak self] in if self?.justCopied == item.id { self?.justCopied = nil } }
     }
 
     /// Copies, closes the notch so focus goes back to the app you were in, then presses ⌘V there.
@@ -147,7 +142,7 @@ final class ClipboardStore: ObservableObject {
         copy(item)
         let target = pasteTarget
         NotificationCenter.default.post(name: .nxtchRequestClose, object: nil)
-        if let target { DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { Keystroke.paste(into: target) } }
+        if let target { after(0.18) { Keystroke.paste(into: target) } }
     }
 
     func togglePin(_ item: ClipItem) {
@@ -168,6 +163,10 @@ final class ClipboardStore: ObservableObject {
         items.removeAll { !$0.pinned }
         save()
     }
+
+    /// Drops items past their age limit. Run at launch and whenever the notch opens, so an old
+    /// item goes even if nothing new has been copied since.
+    func expire() { if trim() { save() } }
 
     func moveSelection(_ delta: Int) {
         selection = max(0, min(visible.count - 1, selection + delta))
