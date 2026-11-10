@@ -13,14 +13,26 @@ APP=Nxtch.app
 BUNDLE_ID=dev.nxtch.app
 
 if [[ " $* " == *" --uninstall "* ]]; then
+  INSTALLED="/Applications/$APP"
+  LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
   # Launch at login is registered against the installed app, so turn it off before removing it.
-  [[ -x "/Applications/$APP/Contents/MacOS/Nxtch" ]] && "/Applications/$APP/Contents/MacOS/Nxtch" --unregister-login-item || true
-  pkill -x Nxtch 2>/dev/null && sleep 1 || true
-  rm -rf "/Applications/$APP" "$APP"
+  [[ -x "$INSTALLED/Contents/MacOS/Nxtch" ]] && "$INSTALLED/Contents/MacOS/Nxtch" --unregister-login-item || true
+  # Permissions are looked up through the installed app, so reset them while it still exists.
+  if tccutil reset All "$BUNDLE_ID" >/dev/null 2>&1; then PERMS="reset"; else PERMS="NOT reset (remove nxtch by hand in System Settings > Privacy & Security)"; fi
+  # Wait for nxtch to be gone: it would write its settings back on the way out.
+  pkill -x Nxtch 2>/dev/null || true
+  for _ in {1..50}; do pgrep -x Nxtch >/dev/null || break; sleep 0.1; done
+  "$LSREGISTER" -u "$INSTALLED" "$PWD/$APP" >/dev/null 2>&1 || true
+  rm -rf "$INSTALLED" "$APP"
   rm -rf "$HOME/Library/Application Support/nxtch"
-  defaults delete "$BUNDLE_ID" 2>/dev/null || true
-  tccutil reset All "$BUNDLE_ID" >/dev/null 2>&1 || true
-  echo "Uninstalled nxtch: app, settings, shelf, clipboard history and permissions removed."
+  # Settings, and everything macOS keeps per app. dev.notchmixer.app is the id nxtch had under its first name.
+  for ID in "$BUNDLE_ID" dev.notchmixer.app; do
+    defaults delete "$ID" 2>/dev/null || true
+    rm -rf "$HOME/Library/Preferences/$ID.plist" "$HOME/Library/Caches/$ID" "$HOME/Library/HTTPStorages/$ID" \
+           "$HOME/Library/Saved Application State/$ID.savedState" \
+           "$(getconf DARWIN_USER_CACHE_DIR)$ID" "$(getconf DARWIN_USER_TEMP_DIR)$ID"
+  done
+  echo "Uninstalled nxtch: app, settings, caches, shelf and clipboard history removed. Permissions: $PERMS."
   exit 0
 fi
 
