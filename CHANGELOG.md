@@ -2,6 +2,10 @@
 
 newest first. every version is a git tag, so `git checkout v0.3.0` gets you that build.
 
+## unreleased
+
+- clipboard: pick the shortcut in the gear menu - ⌃⌥V, ⌃⌘V, ⌃⇧V or off. shown in the search field.
+
 ## 0.6.1 - 2026-11-11
 
 mail attachments stay in mail, a memory watchdog, and the first signed tag.

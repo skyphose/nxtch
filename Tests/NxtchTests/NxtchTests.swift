@@ -66,6 +66,16 @@ final class FileNameTests: XCTestCase {
     }
 }
 
+final class ClipboardShortcutTests: XCTestCase {
+    func testEveryShortcutIsDistinctAndOffHasNone() {
+        let on = ClipboardShortcut.allCases.filter { $0 != .off }
+        XCTAssertNil(ClipboardShortcut.off.keys)
+        XCTAssertEqual(Set(on.map(\.title)).count, on.count)
+        XCTAssertEqual(Set(on.compactMap { $0.keys.map { "\($0.code)-\($0.modifiers)" } }).count, on.count)
+        XCTAssertEqual(ClipboardShortcut(rawValue: "nonsense") ?? .controlOptionV, .controlOptionV)
+    }
+}
+
 final class MemoryWatchdogTests: XCTestCase {
     func testVerdicts() {
         let w = MemoryWatchdog.self, hour: TimeInterval = 3600

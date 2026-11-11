@@ -49,6 +49,9 @@ final class AppSettings: ObservableObject {
     /// Appear on full-screen Spaces. Off by default so it never covers full-screen content.
     @Published var showInFullScreen: Bool { didSet { d.set(showInFullScreen, forKey: "showInFullScreen"); onChange?() } }
     @Published var clipboardEnabled: Bool { didSet { d.set(clipboardEnabled, forKey: "clipboardEnabled"); onChange?() } }
+    @Published var clipboardShortcut: ClipboardShortcut {
+        didSet { d.set(clipboardShortcut.rawValue, forKey: "clipboardShortcut"); onChange?() }
+    }
     @Published var launchAtLogin: Bool {
         didSet {
             guard launchAtLogin != (SMAppService.mainApp.status == .enabled) else { return }
@@ -63,6 +66,7 @@ final class AppSettings: ObservableObject {
         showEars = d.bool(forKey: "showEars")
         showInFullScreen = d.bool(forKey: "showInFullScreen")
         clipboardEnabled = d.bool(forKey: "clipboardEnabled")
+        clipboardShortcut = ClipboardShortcut(rawValue: d.string(forKey: "clipboardShortcut") ?? "") ?? .controlOptionV
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }
 }

@@ -162,6 +162,9 @@ private struct OpenContent: View {
                     Toggle("Activity Beside Notch", isOn: $settings.showEars)
                     Toggle("Full Screen", isOn: $settings.showInFullScreen)
                     Toggle("Clipboard History", isOn: $settings.clipboardEnabled)
+                    Picker("Clipboard Shortcut", selection: $settings.clipboardShortcut) {
+                        ForEach(ClipboardShortcut.allCases) { Text($0.title).tag($0) }
+                    }
                     Divider()
                     Button("Quit") { NSApp.terminate(nil) }
                 } label: {
@@ -179,7 +182,7 @@ private struct OpenContent: View {
                 switch vm.tab {
                 case .media: MediaTab(model: model, nowPlaying: nowPlaying)
                 case .shelf: ShelfTab(shelf: shelf)
-                case .clipboard: ClipboardTab(store: clipboard, enabled: settings.clipboardEnabled)
+                case .clipboard: ClipboardTab(store: clipboard, enabled: settings.clipboardEnabled, shortcut: settings.clipboardShortcut)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

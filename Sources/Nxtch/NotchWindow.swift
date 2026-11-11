@@ -202,6 +202,10 @@ final class NotchController {
             panel.orderFrontRegardless()
         }
         clipboard.enabled = settings.clipboardEnabled
+        if let hotkey, settings.clipboardShortcut != appliedShortcut {
+            hotkey.set(settings.clipboardShortcut)
+            appliedShortcut = settings.clipboardShortcut
+        }
         updateMeterScope()
     }
 
@@ -247,11 +251,15 @@ final class NotchController {
         // monitors it also works while another app's menu is open or during a drag.
         pollTimer = .repeating(0.1, tolerance: 0.03) { [weak self] in self?.trackMouse() }
 
-        // ⌃⌥V: open the clipboard from anywhere.
-        hotkey = Hotkey(keyCode: kVK_ANSI_V, modifiers: controlKey | optionKey) { [weak self] in
+        // ⌃⌥V by default: open the clipboard from anywhere. The gear menu changes or turns it off.
+        hotkey = Hotkey { [weak self] in
             MainActor.assumeIsolated { self?.toggleClipboard() }
         }
+        hotkey?.set(settings.clipboardShortcut)
+        appliedShortcut = settings.clipboardShortcut
     }
+
+    private var appliedShortcut: ClipboardShortcut?
 
     private func updateMeterScope() {
         if vm.isOpen {

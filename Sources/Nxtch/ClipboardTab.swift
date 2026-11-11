@@ -6,6 +6,7 @@ import SwiftUI
 struct ClipboardTab: View {
     @ObservedObject var store: ClipboardStore
     let enabled: Bool
+    let shortcut: ClipboardShortcut
 
     var body: some View {
         VStack(spacing: 4) {
@@ -22,6 +23,10 @@ struct ClipboardTab: View {
                     .onKeyPress(.upArrow) { store.moveSelection(-1); return .handled }
                 if store.selecting {
                     Text("\(store.picked.count) selected").font(.system(size: 10, weight: .medium).monospacedDigit()).foregroundStyle(.secondary)
+                }
+                // The shortcut, faintly, so it's discoverable. The gear menu changes it.
+                if shortcut != .off, store.query.isEmpty, !store.selecting {
+                    Text(shortcut.title).font(.system(size: 11)).foregroundStyle(.white.opacity(0.3))
                 }
                 if !enabled { Text("Paused").font(.system(size: 10, weight: .semibold)).foregroundStyle(.orange) }
             }

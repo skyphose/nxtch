@@ -93,7 +93,7 @@ ad hoc has a cost beyond the nagging: you get used to re-approving audio and acc
 | open | rest the pointer on the notch, drag something onto it, or press ⌃⌥V |
 | close | move away, press esc, or click somewhere else |
 | tabs | icons left of the notch: media, shelf, clipboard. or swipe sideways with two fingers |
-| settings | gear right of the notch: launch at login, activity beside notch, full screen, clipboard history, quit |
+| settings | gear right of the notch: launch at login, activity beside notch, full screen, clipboard history, clipboard shortcut, quit |
 
 ### media
 
@@ -128,7 +128,7 @@ the shelf MOVES files. it doesnt copy them. dropping a file on the notch only no
 
 <img src="Resources/screenshots/clipboard.png" width="635" alt="the clipboard tab: search, then history with the app each item came from">
 
-press ⌃⌥V anywhere and type to search. ↑/↓ moves the selection, return pastes into the app you were in.
+press ⌃⌥V anywhere and type to search. ↑/↓ moves the selection, return pastes into the app you were in. the gear menu switches the shortcut to ⌃⌘V or ⌃⇧V, or turns it off. the search field shows whichever is set.
 
 - click a row to copy it. right-click to paste, pin or delete.
 - to delete some entries and keep the rest, click the check mark button, pick the rows, then the trash. ⌘-click a row does the same without the button. the trash deletes what you picked, pinned or not. outside select mode it clears everything unpinned.
@@ -204,7 +204,7 @@ CHANGELOG.md
 SECURITY.md
 ```
 
-`swift test` runs the tests (that one needs full xcode). 26 of them, none touch audio, the pasteboard or the screen. those parts i test by hand.
+`swift test` runs the tests (that one needs full xcode). 27 of them, none touch audio, the pasteboard or the screen. those parts i test by hand.
 
 
 ## license

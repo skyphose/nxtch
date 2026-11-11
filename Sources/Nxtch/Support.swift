@@ -118,20 +118,54 @@ final class MemoryWatchdog {
 
 // MARK: Global shortcut
 
-/// One system-wide shortcut through Carbon's RegisterEventHotKey (needs no permission).
+/// The shortcut that opens clipboard history. A short list rather than a recorder: each one is
+/// free in the apps most people use (not ⇧⌘V, paste and match style, or ⌥⌘V, Finder's move).
+enum ClipboardShortcut: String, CaseIterable, Identifiable {
+    case controlOptionV, controlCommandV, controlShiftV, off
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .controlOptionV: return "⌃⌥V"
+        case .controlCommandV: return "⌃⌘V"
+        case .controlShiftV: return "⌃⇧V"
+        case .off: return "Off"
+        }
+    }
+
+    /// Carbon key code and modifiers, or nil when off.
+    var keys: (code: Int, modifiers: Int)? {
+        switch self {
+        case .controlOptionV: return (kVK_ANSI_V, controlKey | optionKey)
+        case .controlCommandV: return (kVK_ANSI_V, controlKey | cmdKey)
+        case .controlShiftV: return (kVK_ANSI_V, controlKey | shiftKey)
+        case .off: return nil
+        }
+    }
+}
+
+/// One system-wide shortcut through Carbon's RegisterEventHotKey (needs no permission). The
+/// event handler is installed once; changing the shortcut only swaps the registration.
 final class Hotkey {
     private var ref: EventHotKeyRef?
     private static var handler: (() -> Void)?
 
-    init(keyCode: Int, modifiers: Int, _ handler: @escaping () -> Void) {
+    init(_ handler: @escaping () -> Void) {
         Self.handler = handler
         var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
         InstallEventHandler(GetApplicationEventTarget(), { _, _, _ in
             DispatchQueue.main.async { Hotkey.handler?() }
             return noErr
         }, 1, &spec, nil, nil)
+    }
+
+    /// Registers `shortcut`, replacing the previous one. Off just unregisters.
+    func set(_ shortcut: ClipboardShortcut) {
+        if let ref { UnregisterEventHotKey(ref); self.ref = nil }
+        guard let keys = shortcut.keys else { return }
         let id = EventHotKeyID(signature: OSType(0x6E787463) /* 'nxtc' */, id: 1)
-        let status = RegisterEventHotKey(UInt32(keyCode), UInt32(modifiers), id, GetApplicationEventTarget(), 0, &ref)
+        let status = RegisterEventHotKey(UInt32(keys.code), UInt32(keys.modifiers), id, GetApplicationEventTarget(), 0, &ref)
         if status != noErr { Log.notch.error("hotkey not registered (\(status)); another app may own it") }
     }
 
