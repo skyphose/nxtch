@@ -6,12 +6,12 @@ struct AppEntry: Identifiable, Equatable {
     let id: String            // bundle identifier of the owning app
     let name: String
     let icon: NSImage
-    /// The icon's most vivid colour, for this app's level meter.
+    /// The icon's most vivid color, for this app's level meter.
     let tint: NSColor
     var processObjects: Set<AudioObjectID>
     var isPlaying: Bool
 
-    /// One app's meter fades from its colour to a lighter shade of it.
+    /// One app's meter fades from its color to a lighter shade of it.
     var meterColors: [NSColor] { [tint, tint.blended(withFraction: 0.5, of: .white) ?? tint] }
 
     // NSImage compares by identity, so leave the icon (and name, derived from the same app) out.
@@ -113,7 +113,7 @@ final class MixerModel: ObservableObject {
         resync()
     }
 
-    /// The closed notch's meter: a fade through the colours of every app shown beside it, or one
+    /// The closed notch's meter: a fade through the colors of every app shown beside it, or one
     /// app's own fade when only one is playing.
     var playingColors: [NSColor] {
         let shown = playingApps.prefix(NotchViewModel.maxEarIcons)

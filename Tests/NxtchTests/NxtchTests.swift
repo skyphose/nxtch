@@ -197,7 +197,7 @@ final class MixerLevelTests: XCTestCase {
     }
 }
 
-final class MeterColourTests: XCTestCase {
+final class MeterColorTests: XCTestCase {
     private func square(_ color: NSColor) -> NSImage {
         let image = NSImage(size: NSSize(width: 32, height: 32))
         image.lockFocus()
@@ -214,10 +214,10 @@ final class MeterColourTests: XCTestCase {
         XCTAssertEqual(orange.hueComponent * 360, 28, accuracy: 12)
     }
 
-    func testColourlessIconGivesWhite() {
-        let grey = square(NSColor(srgbRed: 0.5, green: 0.5, blue: 0.5, alpha: 1)).vividColor
-        XCTAssertEqual(grey.saturationComponent, 0, accuracy: 0.01)
-        XCTAssertEqual(grey.brightnessComponent, 1, accuracy: 0.01)
+    func testColorlessIconGivesWhite() {
+        let gray = square(NSColor(srgbRed: 0.5, green: 0.5, blue: 0.5, alpha: 1)).vividColor
+        XCTAssertEqual(gray.saturationComponent, 0, accuracy: 0.01)
+        XCTAssertEqual(gray.brightnessComponent, 1, accuracy: 0.01)
     }
 }
 

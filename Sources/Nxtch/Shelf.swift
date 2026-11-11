@@ -256,7 +256,7 @@ final class ShelfStore: ObservableObject {
             if let tmp, inPlace { add(tmp, false); return }
             guard copiesFile else { saveLinkOrText(); return }
             guard let tmp else { return }
-            // A copy this big is almost certainly a mistake, and would fill the disk quietly.
+            // A copy this big is almost certainly a mistake, and would fill the disk without a word.
             if let size = (try? tmp.resourceValues(forKeys: [.fileSizeKey]))?.fileSize, size > ShelfStore.maxCopiedBytes {
                 Log.shelf.info("drop skipped: over the size limit for copied items")
                 return

@@ -298,7 +298,7 @@ final class NotchController {
 
     /// Like `NSRect.contains`, but counts the top screen edge as inside. When the cursor is pushed
     /// against the top of the screen, `NSEvent.mouseLocation.y == screenFrame.maxY` exactly, which
-    /// `contains` rejects — that made "nudging" up into the notch fail.
+    /// `contains` rejects. That made "nudging" up into the notch fail.
     private func hits(_ r: NSRect, _ p: NSPoint) -> Bool {
         p.x >= r.minX && p.x <= r.maxX && p.y >= r.minY && p.y <= r.maxY + 1
     }

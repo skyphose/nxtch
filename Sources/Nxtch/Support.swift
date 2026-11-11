@@ -75,7 +75,7 @@ func memoryFootprint() -> UInt64? {
 final class MemoryWatchdog {
     enum Verdict: Equatable { case fine, warn, restart }
 
-    /// SCOPE.md's budget is under 80 MB with a full clipboard history; nxtch idles around 20 MB.
+    /// nxtch idles around 16 MB and settles near 34 MB once the panel has been opened.
     nonisolated static let warnBytes: UInt64 = 150 << 20
     nonisolated static let restartBytes: UInt64 = 400 << 20
     /// No restart this soon after launch, so a leak that fills up in seconds can't loop.

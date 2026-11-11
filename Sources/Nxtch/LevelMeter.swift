@@ -93,7 +93,7 @@ final class MeterView: NSView {
     override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); updateClock() }
     override func layout() { super.layout(); drawBars() }
 
-    /// One or two colours fade left to right. Three or more go round the centre like a colour
+    /// One or two colors fade left to right. Three or more go around the center like a color
     /// wheel, so each of them shows up in a meter this small.
     private func applyColors() {
         let c = colors.isEmpty ? [NSColor.white] : colors
@@ -140,13 +140,13 @@ final class MeterView: NSView {
     }
 }
 
-// MARK: Meter colour
+// MARK: Meter color
 
 extension NSImage {
     private static let noColor = NSColor(srgbRed: 1, green: 1, blue: 1, alpha: 1)
 
-    /// The most vivid colour in the image: the dominant hue among its saturated pixels, brightened
-    /// enough to read on black. White for an image with no real colour (a grey or monochrome icon).
+    /// The most vivid color in the image: the dominant hue among its saturated pixels, brightened
+    /// enough to read on black. White for an image with no real color (a gray or monochrome icon).
     var vividColor: NSColor {
         let n = 24
         var px = [UInt8](repeating: 0, count: n * n * 4)
@@ -156,7 +156,7 @@ extension NSImage {
         else { return Self.noColor }
         ctx.draw(cg, in: CGRect(x: 0, y: 0, width: n, height: n))
 
-        // Bucket pixels by hue, weighted by how colourful and opaque they are.
+        // Bucket pixels by hue, weighted by how colorful and opaque they are.
         let buckets = 12
         var weight = [CGFloat](repeating: 0, count: buckets)
         var sum = [(r: CGFloat, g: CGFloat, b: CGFloat)](repeating: (0, 0, 0), count: buckets)
@@ -173,7 +173,7 @@ extension NSImage {
             weight[k] += w
             sum[k].r += r * w; sum[k].g += g * w; sum[k].b += b * w
         }
-        // A colour often straddles two buckets (a fox that is orange and amber), so the winner is
+        // A color often straddles two buckets (a fox that is orange and amber), so the winner is
         // the fullest bucket counted together with its two neighbours, and all three are averaged.
         let near = { (k: Int) in [(k + buckets - 1) % buckets, k, (k + 1) % buckets] }
         let total = { (k: Int) in near(k).reduce(0) { $0 + weight[$1] } }

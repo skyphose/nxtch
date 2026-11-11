@@ -173,7 +173,7 @@ with an ad hoc signature macos may ask again after every update. signing with yo
 
 to report a hole, see [SECURITY.md](SECURITY.md).
 
-what it costs to run, and what stays out on purpose, is in [SCOPE.md](SCOPE.md). what changed in each version is in [CHANGELOG.md](CHANGELOG.md).
+what changed in each version is in [CHANGELOG.md](CHANGELOG.md).
 
 ## project layout
 
@@ -201,7 +201,6 @@ Resources/make-icon.swift    draws it
 Resources/screenshots/       the pictures in this readme
 build.sh
 CHANGELOG.md
-SCOPE.md
 SECURITY.md
 ```
 
