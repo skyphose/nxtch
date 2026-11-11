@@ -118,7 +118,7 @@ the shelf MOVES files. it doesnt copy them. dropping a file on the notch only no
 - the shelf grows down a row at a time, four tiles a row, up to three rows. past that it scrolls.
 - with two or more tiles, each gets a circle in its corner. click it to tick the tile, again to untick it. the check mark button ticks everything. drag a ticked tile and every ticked one goes with it. the buttons and the right-click menu act on the ticked tiles, or on everything when none are.
 - hold ⌥ while dropping to copy and leave the original in place. hold ⌘ to insist on a move.
-- a file dragged in from an app that only lets you copy it still moves when you drag it out, since the shelf tries a move on every file. hold ⌥ for those. i havent found which apps do this.
+- files another app keeps only ever copy out: anything in `~/Library` (mail and messages attachments), inside a package like a photos library, or in a folder you cant write to. i worked that out from where the file is, since the shelf cant ask the app it came from.
 - the destination does the move, not nxtch. an app that only reads the file (a browser upload, a mail attachment) leaves the original alone. finder should copy instead when the folder is on another disk. untested, i only tried one disk.
 - text, links, images and file promises (mail, photos, screenshots) get saved in `~/Library/Application Support/nxtch/Shelf`, kept out of time machine. those move out, so no copy is left behind. anything over 1 GB is skipped. files nxtch only references have no limit. if the place you drop one only takes its path instead of moving or copying it, it stays on the shelf.
 - while you drag an item, a delete square shows up. drop it there to take it off the shelf. your original files are never trashed.
@@ -205,7 +205,7 @@ SCOPE.md
 SECURITY.md
 ```
 
-`swift test` runs the tests (that one needs full xcode). 22 of them, none touch audio, the pasteboard or the screen. those parts i test by hand.
+`swift test` runs the tests (that one needs full xcode). 24 of them, none touch audio, the pasteboard or the screen. those parts i test by hand.
 
 
 ## license

@@ -182,6 +182,8 @@ final class ShelfDragSourceView: NSView, NSDraggingSource {
         // destination does the move, so a target that only reads the file (an upload, an
         // attachment) takes a copy and the original stays where it was.
         let flags = NSEvent.modifierFlags
+        // A file another app keeps (a Mail attachment, a photo in a Photos library) only copies.
+        if dragged.contains(where: \.copyOnly) { return [.copy, .generic] }
         if flags.contains(.option) { return [.copy] }    // ⌥: leave the original in place
         if flags.contains(.command) { return [.move] }   // ⌘: move or nothing
         return [.move, .copy, .generic]

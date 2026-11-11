@@ -66,6 +66,30 @@ final class FileNameTests: XCTestCase {
     }
 }
 
+final class ShelfCopyOnlyTests: XCTestCase {
+    /// A pretend home folder, so nothing is written to the real one.
+    private func home() throws -> URL {
+        let h = FileManager.default.temporaryDirectory.appendingPathComponent("nxtch-home-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: h.appendingPathComponent("Downloads"), withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: h) }
+        return h
+    }
+
+    func testYourOwnFilesMove() throws {
+        let h = try home()
+        XCTAssertFalse(ShelfItem.copyOnly(h.appendingPathComponent("Downloads/report.pdf"), home: h))
+    }
+
+    func testFilesOtherAppsKeepOnlyCopy() throws {
+        let h = try home()
+        XCTAssertTrue(ShelfItem.copyOnly(h.appendingPathComponent("Library/Mail/V10/attachment.pdf"), home: h))
+        XCTAssertTrue(ShelfItem.copyOnly(URL(fileURLWithPath: "/Applications/Safari.app/Contents/Info.plist"), home: h))
+        let package = h.appendingPathComponent("Downloads/Thing.app/Contents", isDirectory: true)
+        try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
+        XCTAssertTrue(ShelfItem.copyOnly(package.appendingPathComponent("file.txt"), home: h))
+    }
+}
+
 final class ClipboardTrimTests: XCTestCase {
     /// A row is one line: no line break of any kind may hide the rest of what Return would paste.
     func testPreviewShowsEverythingOnOneLine() {

@@ -2,6 +2,10 @@
 
 newest first. every version is a git tag, so `git checkout v0.3.0` gets you that build.
 
+## unreleased
+
+- shelf: files another app keeps (in `~/Library`, inside a package, or in a folder you cant write to) only copy out now. dragging them out used to move them, taking a mail attachment out of mail.
+
 ## 0.6.0 - 2026-11-10
 
 a download instead of homebrew, and the repo goes public.

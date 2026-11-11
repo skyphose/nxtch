@@ -11,6 +11,27 @@ struct ShelfItem: Identifiable, Codable, Equatable {
 
     var url: URL { URL(fileURLWithPath: path) }
     var name: String { url.lastPathComponent }
+
+    /// Dragging out only copies this one, never moves it. Worked out from where the file is, not
+    /// saved, so older shelf lists still load.
+    var copyOnly: Bool { !owned && Self.copyOnly(url, home: URL(fileURLWithPath: NSHomeDirectory())) }
+
+    /// A file that belongs to another app rather than to you: anything in ~/Library (Mail and
+    /// Messages attachments), inside a package (a Photos library, an app bundle), outside your
+    /// home folder and external disks, or in a folder you can't write to. Moving one of those
+    /// would pull it out of the app that keeps it.
+    nonisolated static func copyOnly(_ file: URL, home: URL) -> Bool {
+        let path = file.standardizedFileURL.path
+        let homePath = home.standardizedFileURL.path + "/"
+        if path.hasPrefix(homePath + "Library/") { return true }
+        if !path.hasPrefix(homePath), !path.hasPrefix("/Volumes/") { return true }
+        var dir = file.standardizedFileURL.deletingLastPathComponent()
+        while dir.path.count > 1 {
+            if NSWorkspace.shared.isFilePackage(atPath: dir.path) { return true }
+            dir.deleteLastPathComponent()
+        }
+        return !FileManager.default.isWritableFile(atPath: file.standardizedFileURL.deletingLastPathComponent().path)
+    }
 }
 
 /// A temporary holding area for anything dragged onto the notch.
