@@ -175,16 +175,23 @@ final class AppVolumeTap {
         desc.muteBehavior = passthrough ? .unmuted : .mutedWhenTapped
         try check(AudioHardwareCreateProcessTap(desc, &tapID), "Creating process tap")
 
-        let aggregate: [String: Any] = [
+        var aggregate: [String: Any] = [
             kAudioAggregateDeviceNameKey: "nxtch",
             kAudioAggregateDeviceUIDKey: "dev.nxtch.aggregate.\(UUID().uuidString)",
-            kAudioAggregateDeviceMainSubDeviceKey: outputUID,
             kAudioAggregateDeviceIsPrivateKey: true,
             kAudioAggregateDeviceIsStackedKey: false,
             kAudioAggregateDeviceTapAutoStartKey: true,
-            kAudioAggregateDeviceSubDeviceListKey: [[kAudioSubDeviceUIDKey: outputUID]],
-            kAudioAggregateDeviceTapListKey: [[kAudioSubTapDriftCompensationKey: true, kAudioSubTapUIDKey: desc.uuid.uuidString]],
         ]
+        if passthrough {
+            // Listening only: the tap alone, with no output device in the aggregate. nxtch then
+            // isn't an output client of your speakers, and coreaudiod has no silent stream of
+            // ours to mix: about 1 point less coreaudiod cpu, measured.
+            aggregate[kAudioAggregateDeviceTapListKey] = [[kAudioSubTapUIDKey: desc.uuid.uuidString]]
+        } else {
+            aggregate[kAudioAggregateDeviceMainSubDeviceKey] = outputUID
+            aggregate[kAudioAggregateDeviceSubDeviceListKey] = [[kAudioSubDeviceUIDKey: outputUID]]
+            aggregate[kAudioAggregateDeviceTapListKey] = [[kAudioSubTapDriftCompensationKey: true, kAudioSubTapUIDKey: desc.uuid.uuidString]]
+        }
         try check(AudioHardwareCreateAggregateDevice(aggregate as CFDictionary, &aggregateID), "Creating aggregate device")
 
         state.configure(sampleRate: CA.get(aggregateID, kAudioDevicePropertyNominalSampleRate, Float64(48000)) ?? 48000)

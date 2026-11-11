@@ -11,6 +11,7 @@ newest first. every version is a git tag, so `git checkout v0.3.0` gets you that
 - fixed: with two apps playing, the meter beside the closed notch could sit flat after the now-playing app changed. the view wasnt told its tap had moved.
 - meters read the levels 10 times a second and glide between readings, down from 30 redraws a second. fewer wakeups. cpu about the same in my runs, so no claim there.
 - smaller: clipboard rows only rebuild when their own state changes, app icons are only loaded for apps that are shown, the progress line stops ticking while paused.
+- a meter's audio tap no longer opens a silent stream to your speakers. macos's audio service does about 1 point less cpu while music plays (7.3% -> 6.4% across two runs each).
 - level meters can be turned off in the gear menu. off also stops the audio taps that feed them.
 - lighter: the now-playing helper waits for macos to say something changed instead of checking every second. measured at rest: 0.05% cpu and 1.7 wakeups a second, down from about 0.5% and 29. it shows changes sooner too.
 - lighter: the cursor check slows to 3 a second when the pointer is far from the notch. the clipboard check runs once a second, the audio safety refresh every 30 s. the app binary is 0.67 MB, half what it was.
