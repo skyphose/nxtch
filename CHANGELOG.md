@@ -2,7 +2,9 @@
 
 newest first. every version is a git tag, so `git checkout v0.3.0` gets you that build.
 
-## unreleased
+## 0.6.2 - 2026-11-11
+
+lighter at rest and while music plays, a meters switch, a shortcut picker, and fixes from a second audit.
 
 - clipboard: pick the shortcut in the gear menu - ⌃⌥V, ⌃⌘V, ⌃⇧V or off. shown in the search field.
 - shelf: a mail attachment could still move out in 0.6.1. my miss - the drag left the choice to finder, and finder moves on the same disk. copy only now. links and a lowercase `library` cant hide it either.

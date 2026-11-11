@@ -11,7 +11,7 @@ i wanted four small things on my mac: a volume knob per app, a place to park a f
 | a shelf | drop anything on the notch, drag it out and the original moves there | conversion, renaming, sync |
 | clipboard history | text, images and files. ⌃⌥V to search, return to paste | rich text, snippets, sync |
 
-all four live in one app: a 1.3 MB binary, one process, apple frameworks only, no network. with the notch closed and nothing playing it uses 0.1 - 0.4% cpu and about 14 MB of memory. with audio playing, 1.1 - 1.5%. those are from my macbook.
+all four live in one app: a 0.7 MB binary, one process, apple frameworks only, no network. with the notch closed and nothing playing it uses 0.1 - 0.4% cpu and about 14 MB of memory. with audio playing, 0.7 - 1.3%, or about 0.5% with level meters off. those are from my macbook.
 
 <img src="Resources/screenshots/closed.png" width="328" alt="the closed notch: icons of the apps playing on the left, one level meter on the right">
 
@@ -41,7 +41,7 @@ download the zip from the [latest release](https://github.com/skyphose/nxtch/rel
 github builds that zip from the tagged source, not my laptop. the steps are in `.github/workflows/release.yml`. to check a zip came from there, with the [github cli](https://cli.github.com):
 
 ```bash
-gh attestation verify nxtch-v0.6.1.zip --repo skyphose/nxtch --source-ref refs/tags/v0.6.1 \
+gh attestation verify nxtch-v0.6.2.zip --repo skyphose/nxtch --source-ref refs/tags/v0.6.2 \
   --signer-workflow skyphose/nxtch/.github/workflows/release.yml
 ```
 
