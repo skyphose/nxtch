@@ -21,16 +21,20 @@ struct ShelfItem: Identifiable, Codable, Equatable {
     /// home folder and external disks, or in a folder you can't write to. Moving one of those
     /// would pull it out of the app that keeps it.
     nonisolated static func copyOnly(_ file: URL, home: URL) -> Bool {
-        let path = file.standardizedFileURL.path
-        let homePath = home.standardizedFileURL.path + "/"
-        if path.hasPrefix(homePath + "Library/") { return true }
-        if !path.hasPrefix(homePath), !path.hasPrefix("/Volumes/") { return true }
-        var dir = file.standardizedFileURL.deletingLastPathComponent()
+        // Links resolved and case folded, so a symlinked folder, /Volumes/Macintosh HD (a link
+        // to /) or ~/library can't pass for one of your own folders.
+        // The folder is resolved, then the name put back: the file itself may be gone already.
+        let file = file.deletingLastPathComponent().resolvingSymlinksInPath().appendingPathComponent(file.lastPathComponent)
+        let path = file.path.lowercased()
+        let homePath = home.resolvingSymlinksInPath().path.lowercased() + "/"
+        if path.hasPrefix(homePath + "library/") { return true }
+        if !path.hasPrefix(homePath), !path.hasPrefix("/volumes/") { return true }
+        var dir = file.deletingLastPathComponent()
         while dir.path.count > 1 {
             if NSWorkspace.shared.isFilePackage(atPath: dir.path) { return true }
             dir.deleteLastPathComponent()
         }
-        return !FileManager.default.isWritableFile(atPath: file.standardizedFileURL.deletingLastPathComponent().path)
+        return !FileManager.default.isWritableFile(atPath: file.deletingLastPathComponent().path)
     }
 }
 

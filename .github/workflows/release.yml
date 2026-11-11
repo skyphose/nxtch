@@ -1,19 +1,21 @@
 # Builds nxtch from a pushed version tag and attaches the zipped app to a GitHub release.
 # The build runs here, from the tagged source, not on anyone's laptop.
+#
+# Two jobs: `build` runs the repo's own code (build.sh) with read-only access. Only `release`,
+# which runs no repo code, can write releases and sign the attestation.
 name: release
 
 on:
   push:
     tags: ["v*"]
 
-permissions:
-  contents: write       # create the release
-  id-token: write       # sign the provenance attestation
-  attestations: write
+permissions: {}
 
 jobs:
-  release:
+  build:
     runs-on: macos-26   # apple silicon, like every mac with a notch
+    permissions:
+      contents: read
     steps:
       # Actions are pinned to exact commits, so a moved tag upstream can't change what runs here.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -30,10 +32,35 @@ jobs:
         if: ${{ !contains(github.ref_name, '-') }}
         run: test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' Nxtch.app/Contents/Info.plist)" = "${GITHUB_REF_NAME#v}"
 
-      - name: zip
-        run: ditto -c -k --keepParent Nxtch.app "nxtch-$GITHUB_REF_NAME.zip"
+      - name: zip, and this version's changelog section as the release notes
+        run: |
+          ditto -c -k --keepParent Nxtch.app "nxtch-$GITHUB_REF_NAME.zip"
+          awk -v v="${GITHUB_REF_NAME#v}" '$0 ~ "^## " v " " {on=1; next} /^## / {on=0} on' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "test build of $GITHUB_REF_NAME" > notes.md
 
-      # Proves the zip was built here from this tag: gh attestation verify <zip> --repo skyphose/nxtch
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release
+          path: |
+            nxtch-${{ github.ref_name }}.zip
+            notes.md
+          if-no-files-found: error
+          retention-days: 1
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # create the release
+      id-token: write       # sign the provenance attestation
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+
+      # Proves the zip was built by this workflow from this tag:
+      #   gh attestation verify <zip> --repo skyphose/nxtch --source-ref refs/tags/<tag>
       # GitHub only offers this on public repos.
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         if: ${{ !github.event.repository.private }}
@@ -43,9 +70,8 @@ jobs:
       - name: release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          # Notes are this version's section of CHANGELOG.md. A tag with a dash is a pre-release.
-          awk -v v="${GITHUB_REF_NAME#v}" '$0 ~ "^## " v " " {on=1; next} /^## / {on=0} on' CHANGELOG.md > notes.md
-          [ -s notes.md ] || echo "test build of $GITHUB_REF_NAME" > notes.md
+          # A tag with a dash is a pre-release.
           pre=""; case "$GITHUB_REF_NAME" in *-*) pre="--prerelease";; esac
           gh release create "$GITHUB_REF_NAME" "nxtch-$GITHUB_REF_NAME.zip" --title "$GITHUB_REF_NAME" --notes-file notes.md $pre

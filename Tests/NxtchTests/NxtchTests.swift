@@ -114,6 +114,17 @@ final class ShelfCopyOnlyTests: XCTestCase {
         try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
         XCTAssertTrue(ShelfItem.copyOnly(package.appendingPathComponent("file.txt"), home: h))
     }
+
+    /// A link from your own folders into Library, or the wrong case, doesn't make a file movable.
+    func testLinksAndCaseDontHideLibrary() throws {
+        let h = try home()
+        let mail = h.appendingPathComponent("Library/Mail", isDirectory: true)
+        try FileManager.default.createDirectory(at: mail, withIntermediateDirectories: true)
+        let link = h.appendingPathComponent("Downloads/mail")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: mail)
+        XCTAssertTrue(ShelfItem.copyOnly(link.appendingPathComponent("a.pdf"), home: h))
+        XCTAssertTrue(ShelfItem.copyOnly(h.appendingPathComponent("library/Mail/a.pdf"), home: h))
+    }
 }
 
 final class ClipboardTrimTests: XCTestCase {

@@ -111,6 +111,7 @@ final class MemoryWatchdog {
         let relaunch = Process()
         relaunch.executableURL = URL(fileURLWithPath: "/bin/sh")
         relaunch.arguments = ["-c", "sleep 1; /usr/bin/open \"$0\"", Bundle.main.bundlePath]
+        relaunch.environment = [:]   // nothing inherited, like the now-playing helper
         try? relaunch.run()
         NSApp.terminate(nil)
     }

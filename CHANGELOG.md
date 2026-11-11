@@ -5,6 +5,8 @@ newest first. every version is a git tag, so `git checkout v0.3.0` gets you that
 ## unreleased
 
 - clipboard: pick the shortcut in the gear menu - ⌃⌥V, ⌃⌘V, ⌃⇧V or off. shown in the search field.
+- shelf: a mail attachment could still move out in 0.6.1. my miss - the drag left the choice to finder, and finder moves on the same disk. copy only now. links and a lowercase `library` cant hide it either.
+- releases: the job that runs the build has no write access. a separate job, running none of the repo's code, publishes and attests. the readme's verify command checks the exact tag now, not any build.
 
 ## 0.6.1 - 2026-11-11
 

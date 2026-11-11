@@ -41,7 +41,8 @@ download the zip from the [latest release](https://github.com/skyphose/nxtch/rel
 github builds that zip from the tagged source, not my laptop. the steps are in `.github/workflows/release.yml`. to check a zip came from there, with the [github cli](https://cli.github.com):
 
 ```bash
-gh attestation verify nxtch-v0.6.0.zip --repo skyphose/nxtch
+gh attestation verify nxtch-v0.6.1.zip --repo skyphose/nxtch --source-ref refs/tags/v0.6.1 \
+  --signer-workflow skyphose/nxtch/.github/workflows/release.yml
 ```
 
 ### build it yourself
@@ -204,7 +205,7 @@ CHANGELOG.md
 SECURITY.md
 ```
 
-`swift test` runs the tests (that one needs full xcode). 27 of them, none touch audio, the pasteboard or the screen. those parts i test by hand.
+`swift test` runs the tests (that one needs full xcode). 28 of them, none touch audio, the pasteboard or the screen. those parts i test by hand.
 
 
 ## license
