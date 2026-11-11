@@ -51,9 +51,12 @@ final class MixerModel: ObservableObject {
     /// The closed notch meters the now-playing app, so move its tap when that app changes.
     func nowPlayingOwnerChanged() { if meterScope == .primary { resync() } }
 
-    private var taps: [String: AppVolumeTap] = [:]
+    /// Which apps are tapped. Published so a meter's view is rebuilt when its tap moves to
+    /// another app: otherwise the closed notch kept showing the old app's meter, gone flat.
+    @Published private var taps: [String: AppVolumeTap] = [:]
     private var states: [String: TapState] = [:]
     private var lastPlayed: [String: Date] = [:]
+    private static let blank = NSImage()
     private var icons: [String: NSImage] = [:]   // NSRunningApplication.icon reads from disk every call
     private var tints: [String: NSColor] = [:]   // worked out once per app, from its icon
     private var listened = Set<AudioObjectID>()
@@ -173,7 +176,7 @@ final class MixerModel: ObservableObject {
         }
         guard let entry = apps.first(where: { $0.id == id }), !entry.processObjects.isEmpty,
               needsVolume || (entry.isPlaying && wantsMeter), let outputUID else {
-            taps[id] = nil
+            if taps[id] != nil { taps[id] = nil }
             return
         }
         let state = states[id] ?? TapState(gain)
@@ -182,7 +185,7 @@ final class MixerModel: ObservableObject {
 
         if let tap = taps[id], tap.processObjects == entry.processObjects,
            tap.outputUID == outputUID, tap.passthrough == !needsVolume { return }
-        taps[id] = nil
+        if taps[id] != nil { taps[id] = nil }   // the old tap must be gone before the new one starts
         do {
             taps[id] = try AppVolumeTap(processObjects: entry.processObjects, outputUID: outputUID,
                                         passthrough: !needsVolume, state: state)
@@ -209,18 +212,17 @@ final class MixerModel: ObservableObject {
         listened = Set(processes.map(\.objectID))
 
         var grouped: [String: AppEntry] = [:]
+        var running: [String: NSRunningApplication] = [:]
         for proc in processes where proc.pid != me {
             guard let app = NSRunningApplication(processIdentifier: proc.responsiblePID)
                     ?? NSRunningApplication(processIdentifier: proc.pid),
                   app.activationPolicy == .regular, let bid = app.bundleIdentifier, app.processIdentifier != me
             else { continue }
             if grouped[bid] == nil {
-                if icons[bid] == nil {
-                    icons[bid] = app.icon ?? NSImage(systemSymbolName: "app", accessibilityDescription: nil)!
-                    tints[bid] = icons[bid]!.vividColor
-                }
-                grouped[bid] = AppEntry(id: bid, name: app.localizedName ?? bid, icon: icons[bid]!, tint: tints[bid] ?? .white,
+                // The icon and its color are only read (from disk) for apps that end up shown.
+                grouped[bid] = AppEntry(id: bid, name: app.localizedName ?? bid, icon: icons[bid] ?? Self.blank, tint: tints[bid] ?? .white,
                                         processObjects: [], isPlaying: false)
+                if icons[bid] == nil { running[bid] = app }
             }
             grouped[bid]!.processObjects.insert(proc.objectID)
             grouped[bid]!.isPlaying = grouped[bid]!.isPlaying || proc.isRunningOutput
@@ -229,9 +231,17 @@ final class MixerModel: ObservableObject {
         // Show apps that are playing, played in the last 2 minutes, or have a custom setting.
         let now = Date()
         for e in grouped.values where e.isPlaying { lastPlayed[e.id] = now }
-        let visible = grouped.values
+        var visible = grouped.values
             .filter { $0.isPlaying || gain($0.id) != 1 || now.timeIntervalSince(lastPlayed[$0.id] ?? .distantPast) < 120 }
             .sorted { $0.isPlaying != $1.isPlaying ? $0.isPlaying : $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        for i in visible.indices where icons[visible[i].id] == nil {
+            let e = visible[i]
+            let icon = running[e.id]?.icon ?? NSImage(systemSymbolName: "app", accessibilityDescription: nil)!
+            icons[e.id] = icon
+            tints[e.id] = icon.vividColor
+            visible[i] = AppEntry(id: e.id, name: e.name, icon: icon, tint: tints[e.id] ?? .white,
+                                  processObjects: e.processObjects, isPlaying: e.isPlaying)
+        }
         if visible != apps { apps = visible }
 
         let ids = Set(visible.map(\.id))

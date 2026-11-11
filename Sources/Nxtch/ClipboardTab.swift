@@ -44,7 +44,8 @@ struct ClipboardTab: View {
                     ScrollView(.vertical, showsIndicators: false) {
                         LazyVStack(spacing: 1) {   // up to 100 rows, 6 visible
                             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                                ClipRow(item: item, store: store, selected: index == store.selection).id(item.id)
+                                ClipRow(item: item, store: store, selected: index == store.selection, selecting: store.selecting,
+                                        picked: store.picked.contains(item.id), justCopied: store.justCopied == item.id).id(item.id)
                             }
                         }
                     }
@@ -58,15 +59,20 @@ struct ClipboardTab: View {
 
 private struct ClipRow: View {
     let item: ClipItem
-    @ObservedObject var store: ClipboardStore
+    /// Not observed: a row is handed the few values it shows, so typing in the search field or
+    /// moving the selection only rebuilds the rows that changed.
+    let store: ClipboardStore
     let selected: Bool
+    let selecting: Bool
+    let picked: Bool
+    let justCopied: Bool
 
     /// App icons by bundle ID. Looking them up on every redraw is a disk hit per row.
     @MainActor private static var icons: [String: NSImage] = [:]
 
     var body: some View {
         HStack(spacing: 8) {
-            if store.selecting {
+            if selecting {
                 Image(systemName: picked ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 14))
                     .foregroundStyle(picked ? Color.accentColor : .white.opacity(0.35))
@@ -79,7 +85,7 @@ private struct ClipRow: View {
                 Text(item.preview).font(.system(size: 12)).lineLimit(1)
             }
             Spacer(minLength: 4)
-            if store.justCopied == item.id {
+            if justCopied {
                 Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(.green)
             } else {
                 if item.pinned { Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(.orange) }
@@ -91,11 +97,11 @@ private struct ClipRow: View {
         .padding(.horizontal, 8)
         .frame(height: NotchViewModel.clipRowHeight)
         .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
-            .fill(picked ? Color.accentColor.opacity(0.28) : selected && !store.selecting ? .white.opacity(0.12) : .clear))
+            .fill(picked ? Color.accentColor.opacity(0.28) : selected && !selecting ? .white.opacity(0.12) : .clear))
         .contentShape(Rectangle())
         // In select mode a click picks the row. ⌘-click starts select mode from anywhere.
         .onTapGesture {
-            if store.selecting || NSEvent.modifierFlags.contains(.command) { store.togglePick(item) } else { store.copy(item) }
+            if selecting || NSEvent.modifierFlags.contains(.command) { store.togglePick(item) } else { store.copy(item) }
         }
         .animation(.easeOut(duration: 0.12), value: picked)
         .contextMenu {
@@ -107,8 +113,6 @@ private struct ClipRow: View {
             Button("Delete") { store.delete(item) }
         }
     }
-
-    private var picked: Bool { store.picked.contains(item.id) }
 
     @ViewBuilder private var leading: some View {
         if let icon = Self.icon(item.sourceBundleID) {

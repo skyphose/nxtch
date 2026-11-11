@@ -120,7 +120,8 @@ private struct ProgressLine: View {
     let info: NowPlayingInfo
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 0.5)) { ctx in
+        // Paused, the position can't change, so the half-second tick only runs while playing.
+        TimelineView(.periodic(from: .now, by: info.isPlaying ? 0.5 : 3600)) { ctx in
             let pos = info.position(at: ctx.date) ?? 0
             let dur = info.duration ?? 1
             HStack(spacing: 6) {

@@ -268,7 +268,7 @@ final class ClipboardStore: ObservableObject {
     private func trim() -> Bool {
         let (kept, dropped) = Self.trimmed(items, now: Date())
         dropped.forEach(deleteImage)
-        items = kept
+        if !dropped.isEmpty { items = kept }   // no redraw when nothing went
         return !dropped.isEmpty
     }
 

@@ -19,9 +19,10 @@ struct LevelMeter: NSViewRepresentable {
     }
 }
 
-/// One timer for every meter on screen, instead of one each: with five apps in the media tab
-/// that is 30 wakeups a second, not 150. 30 fps while any meter has sound, 4 fps in silence, and
-/// stopped when no meter is visible.
+/// One timer for every meter on screen, instead of one each. It reads the levels 10 times a
+/// second while any meter has sound (4 in silence, stopped when none is visible), and Core
+/// Animation glides the bars between readings. That gliding happens in the window server, so
+/// nxtch wakes 10 times a second for its meters, not 30.
 @MainActor
 final class MeterClock {
     static let shared = MeterClock()
@@ -29,7 +30,7 @@ final class MeterClock {
     private var timer: Timer?
     private var interval: TimeInterval = 0
     private var silentTicks = 0
-    private static let active: TimeInterval = 1.0 / 30
+    static let active: TimeInterval = 0.1
     private static let idle: TimeInterval = 0.25
 
     func add(_ meter: MeterView) {
@@ -59,7 +60,7 @@ final class MeterClock {
         var loud = false
         for meter in live where meter.tick() { loud = true }
         silentTicks = loud ? 0 : silentTicks + 1
-        if !loud, silentTicks > 30, interval == Self.active { schedule(Self.idle) }
+        if !loud, silentTicks > 10, interval == Self.active { schedule(Self.idle) }
         else if loud, interval == Self.idle { schedule(Self.active) }
     }
 }
@@ -91,7 +92,7 @@ final class MeterView: NSView {
     required init?(coder: NSCoder) { fatalError() }
 
     override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); updateClock() }
-    override func layout() { super.layout(); drawBars() }
+    override func layout() { super.layout(); drawBars(animated: false) }
 
     /// One or two colors fade left to right. Three or more go around the center like a color
     /// wheel, so each of them shows up in a meter this small.
@@ -111,7 +112,7 @@ final class MeterView: NSView {
         } else {
             MeterClock.shared.remove(self)
             levels = [0, 0, 0, 0]
-            drawBars()
+            drawBars(animated: false)
         }
     }
 
@@ -119,11 +120,11 @@ final class MeterView: NSView {
     func tick() -> Bool {
         guard let state else { return false }
         levels = state.displayLevels()
-        drawBars()
+        drawBars(animated: true)
         return (levels.max() ?? 0) >= 0.01
     }
 
-    private func drawBars() {
+    private func drawBars(animated: Bool) {
         let n = CGFloat(bars.count)
         let gap = bounds.width * 0.12
         let w = (bounds.width - gap * (n - 1)) / n
@@ -131,10 +132,21 @@ final class MeterView: NSView {
         CATransaction.setDisableActions(true)
         gradient.frame = bounds
         mask.frame = bounds
+        if animated {
+            // Each bar glides to its new height over one clock interval. Only the height: a bar
+            // is centered where it stands, so one animation per bar is enough.
+            CATransaction.setDisableActions(false)
+            CATransaction.setAnimationDuration(MeterClock.active)
+            CATransaction.setAnimationTimingFunction(CAMediaTimingFunction(name: .linear))
+        }
         for (i, bar) in bars.enumerated() {
             let h = max(w, bounds.height * CGFloat(i < levels.count ? levels[i] : 0))
-            bar.frame = CGRect(x: CGFloat(i) * (w + gap), y: (bounds.height - h) / 2, width: w, height: h)
-            bar.cornerRadius = w / 2
+            if animated {
+                bar.bounds.size.height = h
+            } else {
+                bar.frame = CGRect(x: CGFloat(i) * (w + gap), y: (bounds.height - h) / 2, width: w, height: h)
+                bar.cornerRadius = w / 2
+            }
         }
         CATransaction.commit()
     }

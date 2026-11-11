@@ -267,7 +267,7 @@ extension String {
     /// which can hide or disguise what a string really says.
     var withoutInvisibles: String {
         String(String.UnicodeScalarView(unicodeScalars.filter {
-            !CharacterSet.controlCharacters.contains($0) && $0.properties.generalCategory != .format
+            $0.properties.generalCategory != .control && $0.properties.generalCategory != .format
         }))
     }
 }
