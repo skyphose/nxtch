@@ -249,7 +249,7 @@ final class NotchController {
 
         // Hover and drag detection: reading the cursor position is trivial, and unlike event
         // monitors it also works while another app's menu is open or during a drag.
-        pollTimer = .repeating(0.1, tolerance: 0.03) { [weak self] in self?.trackMouse() }
+        setPollInterval(Self.fastPoll)
 
         // ⌃⌥V by default: open the clipboard from anywhere. The gear menu changes or turns it off.
         hotkey = Hotkey { [weak self] in
@@ -334,10 +334,28 @@ final class NotchController {
         buttonWasDown = buttonDown
     }
 
+    /// The cursor check runs 10 times a second near the notch, while it's open, or while a button
+    /// is held (a drag may be on its way), and 3 times a second otherwise. The check itself is a
+    /// round trip to the window server, and this timer is most of nxtch's wakeups at rest.
+    private static let fastPoll: TimeInterval = 0.1
+    private static let slowPoll: TimeInterval = 0.33
+    /// How far below the top of the screen counts as near the notch.
+    private static let nearTop: CGFloat = 120
+    private var pollInterval: TimeInterval = 0
+
+    private func setPollInterval(_ interval: TimeInterval) {
+        guard interval != pollInterval else { return }
+        pollInterval = interval
+        pollTimer?.invalidate()
+        pollTimer = .repeating(interval, tolerance: interval * 0.3) { [weak self] in self?.trackMouse() }
+    }
+
     private func trackMouse() {
         let p = NSEvent.mouseLocation
         let buttonDown = mouseButtonDown
         updateDragState(buttonDown: buttonDown)
+        let near = vm.isOpen || buttonDown || p.y > vm.geometry.screenFrame.maxY - Self.nearTop
+        setPollInterval(near ? Self.fastPoll : Self.slowPoll)
 
         if vm.isOpen {
             let overShape = hits(openShapeRect, p)

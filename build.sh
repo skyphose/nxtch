@@ -51,6 +51,8 @@ fi
 rm -rf "$APP" && mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" .build
 xcrun swiftc -O -wmo -module-name Nxtch -target "$(uname -m)-apple-macosx14.2" \
   -module-cache-path .build/module-cache Sources/Nxtch/*.swift -o "$APP/Contents/MacOS/Nxtch"
+# Local symbol names are only for debuggers: about half the binary, none of it loaded at run time.
+strip -x "$APP/Contents/MacOS/Nxtch"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 

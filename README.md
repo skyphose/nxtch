@@ -133,7 +133,7 @@ press ⌃⌥V anywhere and type to search. ↑/↓ moves the selection, return p
 
 - click a row to copy it. right-click to paste, pin or delete.
 - to delete some entries and keep the rest, click the check mark button, pick the rows, then the trash. ⌘-click a row does the same without the button. the trash deletes what you picked, pinned or not. outside select mode it clears everything unpinned.
-- anything a password manager marks as concealed or transient is never recroded. nothing is recorded while a password manager is in front, or was at any point since the last check (twice a second), since not all of them mark their items. the list is in `Clipboard.swift`. four of the ids on it (macpass, strongbox, keeper, nordpass) i wrote down without an install to check against.
+- anything a password manager marks as concealed or transient is never recroded. nothing is recorded while a password manager is in front, or was at any point since the last check (once a second), since not all of them mark their items. the list is in `Clipboard.swift`. four of the ids on it (macpass, strongbox, keeper, nordpass) i wrote down without an install to check against.
 - a password copied from a browser extension or a terminal looks like any other text, so that still gets recorded. delete it, or pause recording first.
 - unpinned items are dropped after 7 days.
 - things copied on your iphone (universal clipboard) arent recorded. untested.
@@ -155,7 +155,7 @@ with an ad hoc signature macos may ask again after every update. signing with yo
 
 **meters.** the tap callback splits each app's audio into four bands with one-pole filters. meters are drawn with `CALayer`s and only run where you can see them.
 
-**now playing.** since macos 15.4, `MediaRemote` only answers apple-signed programs. so nxtch asks through `osascript` (jxa), which is apple-signed. a long-running helper reports title, artist and position, and quits when nxtch quits. the playback buttons send comamnds the same way, so they need no permission.
+**now playing.** since macos 15.4, `MediaRemote` only answers apple-signed programs. so nxtch asks through `osascript` (jxa), which is apple-signed. a long-running helper reports title, artist and position. it waits for macos to say something changed instead of checking every second, and quits when nxtch quits. the playback buttons send comamnds the same way, so they need no permission.
 
 **the notch panel.** a borderless, non-activating `NSPanel` above the menu bar. it tries hard to stay out of the way:
 

@@ -37,7 +37,7 @@ struct ClipItem: Identifiable, Codable, Equatable {
     }
 }
 
-/// Clipboard history. Checks the pasteboard's change count twice a second (one integer read) and
+/// Clipboard history. Checks the pasteboard's change count once a second (one integer read) and
 /// records text, images and file references.
 @MainActor
 final class ClipboardStore: ObservableObject {
@@ -99,7 +99,8 @@ final class ClipboardStore: ObservableObject {
             let id = (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.bundleIdentifier
             MainActor.assumeIsolated { if let id { self?.activated.insert(id) } }
         }
-        timer = .repeating(0.5, tolerance: 0.2) { [weak self] in self?.poll() }
+        // Once a second: a changeCount read is cheap, and the wakeup is what costs.
+        timer = .repeating(1, tolerance: 0.5) { [weak self] in self?.poll() }
     }
 
     /// Pinned first, then newest first, filtered by the search query.

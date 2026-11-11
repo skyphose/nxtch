@@ -76,7 +76,7 @@ final class MixerModel: ObservableObject {
         }
         // Changes arrive as Core Audio notifications. This slow timer is a safety net and ages
         // out "recently played".
-        timer = .repeating(5, tolerance: 1) { [weak self] in self?.refresh() }
+        timer = .repeating(30, tolerance: 5) { [weak self] in self?.refresh() }
     }
 
     var anyPlaying: Bool { apps.contains { $0.isPlaying } }

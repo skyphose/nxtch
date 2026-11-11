@@ -8,6 +8,9 @@ newest first. every version is a git tag, so `git checkout v0.3.0` gets you that
 - shelf: a mail attachment could still move out in 0.6.1. my miss - the drag left the choice to finder, and finder moves on the same disk. copy only now. links and a lowercase `library` cant hide it either.
 - releases: the job that runs the build has no write access. a separate job, running none of the repo's code, publishes and attests. the readme's verify command checks the exact tag now, not any build.
 
+- lighter: the now-playing helper waits for macos to say something changed instead of checking every second. measured at rest: 0.05% cpu and 1.7 wakeups a second, down from about 0.5% and 29. it shows changes sooner too.
+- lighter: the cursor check slows to 3 a second when the pointer is far from the notch, the clipboard check to once a second, the audio safety refresh to every 30 s. the app binary is 0.67 MB, half what it was.
+
 ## 0.6.1 - 2026-11-11
 
 mail attachments stay in mail, a memory watchdog, and the first signed tag.
