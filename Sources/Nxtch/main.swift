@@ -46,6 +46,9 @@ final class AppSettings: ObservableObject {
 
     /// App icon and level meter beside the notch while audio plays. They can cover menu bar items.
     @Published var showEars: Bool { didSet { d.set(showEars, forKey: "showEars"); onChange?() } }
+    /// Level meters everywhere. Off also stops the listen-only audio taps that feed them, the
+    /// biggest cost while music plays. Volume control is unaffected.
+    @Published var showMeters: Bool { didSet { d.set(showMeters, forKey: "showMeters"); onChange?() } }
     /// Appear on full-screen Spaces. Off by default so it never covers full-screen content.
     @Published var showInFullScreen: Bool { didSet { d.set(showInFullScreen, forKey: "showInFullScreen"); onChange?() } }
     @Published var clipboardEnabled: Bool { didSet { d.set(clipboardEnabled, forKey: "clipboardEnabled"); onChange?() } }
@@ -62,8 +65,9 @@ final class AppSettings: ObservableObject {
     }
 
     init() {
-        d.register(defaults: ["showEars": true, "showInFullScreen": false, "clipboardEnabled": true])
+        d.register(defaults: ["showEars": true, "showMeters": true, "showInFullScreen": false, "clipboardEnabled": true])
         showEars = d.bool(forKey: "showEars")
+        showMeters = d.bool(forKey: "showMeters")
         showInFullScreen = d.bool(forKey: "showInFullScreen")
         clipboardEnabled = d.bool(forKey: "clipboardEnabled")
         clipboardShortcut = ClipboardShortcut(rawValue: d.string(forKey: "clipboardShortcut") ?? "") ?? .controlOptionV

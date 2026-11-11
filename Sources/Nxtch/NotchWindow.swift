@@ -262,7 +262,9 @@ final class NotchController {
     private var appliedShortcut: ClipboardShortcut?
 
     private func updateMeterScope() {
-        if vm.isOpen {
+        if !settings.showMeters {
+            model.meterScope = .none
+        } else if vm.isOpen {
             model.meterScope = vm.tab == .media ? .all : .none
         } else {
             model.meterScope = settings.showEars ? .primary : .none

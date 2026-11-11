@@ -94,7 +94,7 @@ ad hoc has a cost beyond the nagging: you get used to re-approving audio and acc
 | open | rest the pointer on the notch, drag something onto it, or press ⌃⌥V |
 | close | move away, press esc, or click somewhere else |
 | tabs | icons left of the notch: media, shelf, clipboard. or swipe sideways with two fingers |
-| settings | gear right of the notch: launch at login, activity beside notch, full screen, clipboard history, clipboard shortcut, quit |
+| settings | gear right of the notch: launch at login, activity beside notch, level meters, full screen, clipboard history, clipboard shortcut, quit |
 
 ### media
 
@@ -106,6 +106,7 @@ whats playing (title, artist, progress, the app its in) with previous, play/paus
 - the reset button puts every app back to 100%. its at the top right of the media tab, and only shows when an app is muted or off 100%.
 - closed, the notch shows an icon for every app making sound on its left. up to four. one level meter sits on the right, and its bars follow the first app only.
 - the meter takes its color from the icons: green for spotify, orange for firefox. two apps fade from one color to the other. three or more make a wheel.
+- level meters in the gear menu turns every meter off. that also stops the audio taps behind them, the biggest cost while music plays. volume still works.
 - an icon with several colors gets one blended color, so chrome comes out orange too. chrome and firefox toegther is a flat orange. an icon with no real color gives white.
 
 ### shelf

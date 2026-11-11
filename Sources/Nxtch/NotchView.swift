@@ -45,7 +45,11 @@ struct NotchView: View {
     /// The left ear holds an icon per playing app, the right ear one meter. The ears can differ
     /// in width, so the closed shape is shifted to keep the hardware notch in its middle.
     private var leftEar: CGFloat { earsVisible ? NotchViewModel.leftEarWidth(icons: model.playingApps.count) : 0 }
-    private var rightEar: CGFloat { earsVisible ? NotchViewModel.earWidth : 0 }
+    /// The right ear holds the meter while audio plays (the shelf count otherwise), so with
+    /// meters off and audio playing there's no right ear.
+    private var rightEar: CGFloat {
+        earsVisible && (settings.showMeters || model.primaryApp == nil) ? NotchViewModel.earWidth : 0
+    }
 
     var body: some View {
         let size = vm.isOpen
@@ -60,7 +64,7 @@ struct NotchView: View {
                         .padding(.bottom, 10)
                         .transition(.opacity.combined(with: .scale(scale: 0.92, anchor: .top)))
                 } else {
-                    ClosedContent(vm: vm, model: model, shelf: shelf, showEars: earsVisible, leftEar: leftEar)
+                    ClosedContent(vm: vm, model: model, shelf: shelf, showEars: earsVisible, showMeter: settings.showMeters, leftEar: leftEar)
                         .transition(.opacity)
                 }
             }
@@ -98,6 +102,7 @@ private struct ClosedContent: View {
     @ObservedObject var model: MixerModel
     @ObservedObject var shelf: ShelfStore
     let showEars: Bool
+    let showMeter: Bool
     let leftEar: CGFloat
 
     var body: some View {
@@ -113,9 +118,11 @@ private struct ClosedContent: View {
                     }
                     .frame(width: leftEar)
                     Spacer(minLength: vm.geometry.notchSize.width)
-                    LevelMeter(state: model.meter(owner.id), colors: model.playingColors)
-                        .frame(width: 16, height: 14)
-                        .frame(width: NotchViewModel.earWidth)
+                    if showMeter {
+                        LevelMeter(state: model.meter(owner.id), colors: model.playingColors)
+                            .frame(width: 16, height: 14)
+                            .frame(width: NotchViewModel.earWidth)
+                    }
                 } else if !shelf.isEmpty {
                     Image(systemName: "tray.full.fill").font(.system(size: 12))
                         .frame(width: NotchViewModel.earWidth)
@@ -160,6 +167,7 @@ private struct OpenContent: View {
                 Menu {
                     Toggle("Launch at Login", isOn: $settings.launchAtLogin)
                     Toggle("Activity Beside Notch", isOn: $settings.showEars)
+                    Toggle("Level Meters", isOn: $settings.showMeters)
                     Toggle("Full Screen", isOn: $settings.showInFullScreen)
                     Toggle("Clipboard History", isOn: $settings.clipboardEnabled)
                     Picker("Clipboard Shortcut", selection: $settings.clipboardShortcut) {
@@ -180,7 +188,7 @@ private struct OpenContent: View {
 
             Group {
                 switch vm.tab {
-                case .media: MediaTab(model: model, nowPlaying: nowPlaying)
+                case .media: MediaTab(model: model, nowPlaying: nowPlaying, meters: settings.showMeters)
                 case .shelf: ShelfTab(shelf: shelf)
                 case .clipboard: ClipboardTab(store: clipboard, enabled: settings.clipboardEnabled, shortcut: settings.clipboardShortcut)
                 }

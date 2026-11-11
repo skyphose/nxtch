@@ -4,12 +4,13 @@ import SwiftUI
 struct MediaTab: View {
     @ObservedObject var model: MixerModel
     @ObservedObject var nowPlaying: NowPlayingMonitor
+    let meters: Bool
 
     var body: some View {
         VStack(spacing: 0) {
             if let info = nowPlaying.info {
                 let owner = model.apps.first { info.belongs(to: $0.id) }
-                NowPlayingCard(monitor: nowPlaying, info: info, app: owner, meter: owner.flatMap { model.meter($0.id) })
+                NowPlayingCard(monitor: nowPlaying, info: info, app: owner, meter: owner.flatMap { model.meter($0.id) }, showMeter: meters)
                     .frame(height: NotchViewModel.nowPlayingHeight)
                     .transition(.opacity)
             }
@@ -34,7 +35,7 @@ struct MediaTab: View {
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 0) {
                         ForEach(model.apps) { app in
-                            AppRow(app: app, model: model,
+                            AppRow(app: app, model: model, showMeter: meters,
                                    media: nowPlaying.info.flatMap { $0.belongs(to: app.id) ? $0 : nil })
                         }
                     }
@@ -49,6 +50,7 @@ private struct NowPlayingCard: View {
     let info: NowPlayingInfo
     let app: AppEntry?
     let meter: TapState?
+    let showMeter: Bool
 
     var body: some View {
         HStack(spacing: 12) {
@@ -65,8 +67,10 @@ private struct NowPlayingCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(info.title).font(.system(size: 13, weight: .semibold)).lineLimit(1)
-                    LevelMeter(state: info.isPlaying ? meter : nil, colors: app?.meterColors ?? [.white])
-                        .frame(width: 12, height: 10)
+                    if showMeter {
+                        LevelMeter(state: info.isPlaying ? meter : nil, colors: app?.meterColors ?? [.white])
+                            .frame(width: 12, height: 10)
+                    }
                 }
                 if let subtitle = [info.artist, info.album].compactMap({ $0 }).filter({ !$0.isEmpty }).first {
                     Text(subtitle).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
@@ -145,6 +149,7 @@ private struct ProgressLine: View {
 private struct AppRow: View {
     let app: AppEntry
     @ObservedObject var model: MixerModel
+    let showMeter: Bool
     let media: NowPlayingInfo?
 
     /// The slider sticks to 100% as it passes. Holding ⇧ turns that off, so any value can be set.
@@ -168,7 +173,7 @@ private struct AppRow: View {
                             .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
                     }
                     Spacer(minLength: 4)
-                    if app.isPlaying {
+                    if app.isPlaying, showMeter {
                         LevelMeter(state: muted ? nil : model.meter(app.id), colors: app.meterColors)
                             .frame(width: 12, height: 9)
                     }
