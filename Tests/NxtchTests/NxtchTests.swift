@@ -66,6 +66,22 @@ final class FileNameTests: XCTestCase {
     }
 }
 
+final class MemoryWatchdogTests: XCTestCase {
+    func testVerdicts() {
+        let w = MemoryWatchdog.self, hour: TimeInterval = 3600
+        XCTAssertEqual(w.verdict(20 << 20, uptime: hour), .fine)
+        XCTAssertEqual(w.verdict(w.warnBytes, uptime: hour), .warn)
+        XCTAssertEqual(w.verdict(w.restartBytes, uptime: hour), .restart)
+        // Right after launch it only warns, so a fast leak can't restart it over and over.
+        XCTAssertEqual(w.verdict(w.restartBytes, uptime: 30), .warn)
+    }
+
+    func testFootprintIsReadable() throws {
+        let bytes = try XCTUnwrap(memoryFootprint())
+        XCTAssertGreaterThan(bytes, 1 << 20)
+    }
+}
+
 final class ShelfCopyOnlyTests: XCTestCase {
     /// A pretend home folder, so nothing is written to the real one.
     private func home() throws -> URL {

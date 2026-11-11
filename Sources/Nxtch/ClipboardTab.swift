@@ -31,7 +31,7 @@ struct ClipboardTab: View {
 
             let items = store.visible
             if items.isEmpty {
-                Text(store.query.isEmpty ? "Nothing copied yet" : "No matches")
+                Text(store.query.isEmpty ? "No history" : "No matches")
                     .font(.system(size: 12)).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {

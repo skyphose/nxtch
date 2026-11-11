@@ -5,6 +5,7 @@ import ServiceManagement
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var nowPlaying: NowPlayingMonitor?
     private var notch: NotchController?
+    private var watchdog: MemoryWatchdog?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let model = MixerModel(), nowPlaying = NowPlayingMonitor(), settings = AppSettings()
@@ -15,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         nowPlaying.ownerChanged = { [weak model] in model?.nowPlayingOwnerChanged() }
         self.nowPlaying = nowPlaying
         notch = NotchController(model: model, nowPlaying: nowPlaying, settings: settings, shelf: shelf, clipboard: clipboard)
+        watchdog = MemoryWatchdog()
     }
 
     func applicationWillTerminate(_ notification: Notification) { nowPlaying?.stop() }

@@ -205,7 +205,7 @@ SCOPE.md
 SECURITY.md
 ```
 
-`swift test` runs the tests (that one needs full xcode). 24 of them, none touch audio, the pasteboard or the screen. those parts i test by hand.
+`swift test` runs the tests (that one needs full xcode). 26 of them, none touch audio, the pasteboard or the screen. those parts i test by hand.
 
 
 ## license

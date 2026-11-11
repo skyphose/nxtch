@@ -4,6 +4,9 @@ newest first. every version is a git tag, so `git checkout v0.3.0` gets you that
 
 ## unreleased
 
+- memory watchdog: once a minute nxtch reads its own memory. past 150 MB it logs a warning, past 400 MB it logs a fault and restarts itself. never in the first 10 minutes after launch, so a fast leak cant loop it.
+- leak check: none. `leaks` found 0 at idle and after 4 minutes of use. memory went 21 -> 34 MB the first time the notch opened, then stayed flat. that first open is swiftui and the system fonts and icons setting up, not nxtch's own data.
+- clipboard: the empty tab says "No history".
 - shelf: files another app keeps (in `~/Library`, inside a package, or in a folder you cant write to) only copy out now. dragging them out used to move them, taking a mail attachment out of mail.
 
 ## 0.6.0 - 2026-11-10

@@ -9,7 +9,7 @@ hard limits. a change that breaks one doesnt ship.
 | | limit |
 | --- | --- |
 | idle cpu, notch closed | about 0% with nothing playing. 2% max while an app is playing (closed-notch meter on) |
-| memory | under 80 MB resident with a full clipboard history |
+| memory | under 80 MB resident with a full clipboard history. a watchdog logs past 150 MB and restarts nxtch past 400 MB |
 | dependencies | none. apple frameworks only, one binary, built with `swiftc` from the command line tools |
 | helpers | one (`osascript` for now playing), and it quits when nxtch quits |
 | network | none. no accounts, sync, analytics, crash reporting or auto-update |

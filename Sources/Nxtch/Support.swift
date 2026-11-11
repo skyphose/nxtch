@@ -52,6 +52,68 @@ enum Log {
     static let notch = Logger(subsystem: subsystem, category: "notch")
     static let shelf = Logger(subsystem: subsystem, category: "shelf")
     static let clipboard = Logger(subsystem: subsystem, category: "clipboard")
+    static let memory = Logger(subsystem: subsystem, category: "memory")
+}
+
+// MARK: Memory watchdog
+
+/// nxtch's own memory, the "footprint" Activity Monitor shows, from one kernel call.
+func memoryFootprint() -> UInt64? {
+    var info = task_vm_info_data_t()
+    var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+    let result = withUnsafeMutablePointer(to: &info) {
+        $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+            task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+        }
+    }
+    return result == KERN_SUCCESS ? info.phys_footprint : nil
+}
+
+/// Checks nxtch's memory once a minute. Past the budget it logs a warning, once. Far past it
+/// (something is leaking) it logs a fault and restarts nxtch, which frees everything.
+@MainActor
+final class MemoryWatchdog {
+    enum Verdict: Equatable { case fine, warn, restart }
+
+    /// SCOPE.md's budget is under 80 MB with a full clipboard history; nxtch idles around 20 MB.
+    nonisolated static let warnBytes: UInt64 = 150 << 20
+    nonisolated static let restartBytes: UInt64 = 400 << 20
+    /// No restart this soon after launch, so a leak that fills up in seconds can't loop.
+    nonisolated static let minUptime: TimeInterval = 10 * 60
+
+    nonisolated static func verdict(_ bytes: UInt64, uptime: TimeInterval) -> Verdict {
+        if bytes >= restartBytes, uptime >= minUptime { return .restart }
+        return bytes >= warnBytes ? .warn : .fine
+    }
+
+    private let launched = Date()
+    private var warned = false
+    private var timer: Timer?
+
+    init() { timer = .repeating(60, tolerance: 15) { [weak self] in self?.check() } }
+
+    private func check() {
+        guard let used = memoryFootprint() else { return }
+        let mb = used >> 20
+        switch Self.verdict(used, uptime: Date().timeIntervalSince(launched)) {
+        case .fine: return
+        case .warn:
+            if !warned { warned = true; Log.memory.error("using \(mb, privacy: .public) MB, past the \(Self.warnBytes >> 20, privacy: .public) MB warning line") }
+        case .restart:
+            Log.memory.fault("using \(mb, privacy: .public) MB, past \(Self.restartBytes >> 20, privacy: .public) MB: restarting")
+            restart()
+        }
+    }
+
+    /// Opens a fresh copy a second after this one quits. The bundle path goes in as an argument,
+    /// never into the command text.
+    private func restart() {
+        let relaunch = Process()
+        relaunch.executableURL = URL(fileURLWithPath: "/bin/sh")
+        relaunch.arguments = ["-c", "sleep 1; /usr/bin/open \"$0\"", Bundle.main.bundlePath]
+        try? relaunch.run()
+        NSApp.terminate(nil)
+    }
 }
 
 // MARK: Global shortcut
