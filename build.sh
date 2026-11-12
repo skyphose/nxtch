@@ -49,12 +49,9 @@ fi
 # swiftc directly, not swift build: the free command line tools can compile nxtch this way, while
 # their swiftpm fails on recent macOS. So full Xcode is not needed. (swift test still uses swiftpm.)
 rm -rf "$APP" && mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" .build
-# Both chips in one binary, so the same app runs on Apple silicon and Intel Macs.
-for ARCH in arm64 x86_64; do
-  xcrun swiftc -O -wmo -module-name Nxtch -target "$ARCH-apple-macosx14.2" \
-    -module-cache-path .build/module-cache Sources/Nxtch/*.swift -o ".build/Nxtch-$ARCH"
-done
-lipo -create .build/Nxtch-arm64 .build/Nxtch-x86_64 -output "$APP/Contents/MacOS/Nxtch"
+# Apple silicon only: every Mac with a notch has one.
+xcrun swiftc -O -wmo -module-name Nxtch -target arm64-apple-macosx14.2 \
+  -module-cache-path .build/module-cache Sources/Nxtch/*.swift -o "$APP/Contents/MacOS/Nxtch"
 # Local symbol names are only for debuggers: about half the binary, none of it loaded at run time.
 strip -x "$APP/Contents/MacOS/Nxtch"
 cp Resources/Info.plist "$APP/Contents/Info.plist"

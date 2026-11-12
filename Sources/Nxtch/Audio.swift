@@ -94,7 +94,7 @@ enum AudioPermission {
                 AudioHardwareDestroyProcessTap(tap)
             }
             Log.audio.info("permission check status=\(status, privacy: .public) ms=\(Int(Date().timeIntervalSince(began) * 1000), privacy: .public)")
-            DispatchQueue.main.async { MainActor.assumeIsolated(done) }
+            onMain(done)
         }
     }
 }

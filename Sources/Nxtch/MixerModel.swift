@@ -72,7 +72,7 @@ final class MixerModel: ObservableObject {
         muted = Set(defaults.stringArray(forKey: "muted") ?? [])
         // Not during launch: starting a tap can take a second, and waits on the macOS permission
         // prompt the first time. The notch should be on screen before that, not after.
-        DispatchQueue.main.async { [weak self] in MainActor.assumeIsolated { self?.refresh() } }
+        onMain { [weak self] in self?.refresh() }
         CA.listen(CA.system, kAudioHardwarePropertyProcessObjectList) { [weak self] in
             MainActor.assumeIsolated { self?.scheduleRefresh() }
         }
@@ -277,9 +277,7 @@ final class MixerModel: ObservableObject {
         // and the list above should reach the screen (the icons beside the notch) first.
         guard !tapsPending else { return }
         tapsPending = true
-        DispatchQueue.main.async { [weak self] in
-            MainActor.assumeIsolated { self?.tapsPending = false; self?.resync() }
-        }
+        onMain { [weak self] in self?.tapsPending = false; self?.resync() }
     }
 
     private var tapsPending = false

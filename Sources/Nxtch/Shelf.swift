@@ -213,7 +213,7 @@ final class ShelfStore: ObservableObject {
     private nonisolated func ingest(_ p: NSItemProvider) {
         let storage = self.storage
         let add: @Sendable (URL, Bool) -> Void = { url, owned in
-            DispatchQueue.main.async { MainActor.assumeIsolated { self.add(url, owned: owned) } }
+            onMain { self.add(url, owned: owned) }
         }
         let has = { (t: UTType) in p.hasItemConformingToTypeIdentifier(t.identifier) }
         let firstType = { (t: UTType) in p.registeredTypeIdentifiers.first { UTType($0)?.conforms(to: t) == true } }
@@ -285,7 +285,7 @@ final class ShelfStore: ObservableObject {
         let id = item.id
         QLThumbnailGenerator.shared.generateBestRepresentation(for: request) { rep, _ in
             guard let image = rep?.nsImage else { return }
-            DispatchQueue.main.async { MainActor.assumeIsolated { if self.thumbnails[id] != nil { self.thumbnails[id] = image } } }
+            onMain { if self.thumbnails[id] != nil { self.thumbnails[id] = image } }
         }
     }
 }

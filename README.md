@@ -11,15 +11,15 @@ i wanted four small things on my mac: a volume knob per app, a place to park a f
 | a shelf | drop anything on the notch, drag it out and the original moves there | conversion, renaming, sync |
 | clipboard history | text, images and files. ⌃⌥V to search, return to paste | rich text, snippets, sync |
 
-all four live in one app: a 1.4 MB binary (apple silicon and intel in one), one process, apple frameworks only, no network. with the notch closed and nothing playing it uses under 0.1% cpu and about 14 MB of memory. with audio playing, 0.7 - 1.3%, or about 0.5% with level meters off. those are from my macbook.
+all four live in one app: a 0.7 MB binary, one process, apple frameworks only, no network. with the notch closed and nothing playing it uses under 0.1% cpu and about 14 MB of memory. with audio playing, 0.7 - 1.3%, or about 0.5% with level meters off. those are from my macbook.
 
 <img src="Resources/screenshots/closed.png" width="328" alt="the closed notch: icons of the apps playing on the left, one level meter on the right">
 
 ## before you install
 
 - macos 14.2 or later. process taps arrived in 14.2. ive only run it on macos 27.2, on one m-series macbook pro. 14.2 is the floor on paper, not something i tested.
-- apple silicon or intel. the intel half of the app has never been run: i dont have one.
-- a mac with a notch. on other displays it falls back to a small pill at the top center, as tall as the menu bar. untested on a real one. i checked the layout at four pretend notch sizes on mine.
+- a macbook with a notch, which also means apple silicon. theres no intel build.
+- with the lid shut on an external display, nxtch falls back to a small pill at the top center, as tall as the menu bar. untested on a real one. i checked the layout at four pretend notch sizes on mine.
 
 ## who its not for
 
@@ -42,7 +42,7 @@ download the zip from the [latest release](https://github.com/skyphose/nxtch/rel
 github builds that zip from the tagged source, not my laptop. the steps are in `.github/workflows/release.yml`. to check a zip came from there, with the [github cli](https://cli.github.com):
 
 ```bash
-gh attestation verify nxtch-v0.6.3.zip --repo skyphose/nxtch --source-ref refs/tags/v0.6.3 \
+gh attestation verify nxtch-v0.6.4.zip --repo skyphose/nxtch --source-ref refs/tags/v0.6.4 \
   --signer-workflow skyphose/nxtch/.github/workflows/release.yml
 ```
 

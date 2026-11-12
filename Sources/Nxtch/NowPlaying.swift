@@ -102,7 +102,7 @@ final class NowPlayingMonitor: ObservableObject {
         pipe.fileHandleForReading.readabilityHandler = { [weak self] h in
             let data = h.availableData
             guard !data.isEmpty else { return }
-            DispatchQueue.main.async { MainActor.assumeIsolated { self?.consume(data) } }
+            onMain { self?.consume(data) }
         }
         let started = Date()
         process = Self.osascript(Self.monitorScript, String(ProcessInfo.processInfo.processIdentifier), stderr: pipe)

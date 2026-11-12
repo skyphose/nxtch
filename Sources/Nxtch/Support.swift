@@ -17,6 +17,11 @@ func after(_ delay: TimeInterval, _ body: @escaping @MainActor () -> Void) -> Di
     return work
 }
 
+/// Runs `body` on the main thread on its next pass, from whatever thread this is called on.
+func onMain(_ body: @escaping @MainActor () -> Void) {
+    DispatchQueue.main.async { MainActor.assumeIsolated(body) }
+}
+
 extension Timer {
     /// A repeating main-thread timer. The tolerance lets macOS batch wakeups.
     @MainActor
