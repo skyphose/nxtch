@@ -2,6 +2,23 @@
 
 newest first. every version is a git tag, so `git checkout v0.3.0` gets you that build.
 
+## 0.6.3 - 2026-11-11
+
+a mixer that keeps up again, hover on the icons, an about window, and an intel build.
+
+- fixed: the mixer could be 30 s late when an app started or stopped playing. my miss in 0.6.2. nxtch listened for a notice macos never sends, and a 5 s re-check had been hiding that until i slowed it to 30. it listens for the one macos does send now.
+- resting on the icons or the meter beside the notch opens it, not just the notch itself. a click there no longer reaches the menu bar item underneath.
+- about nxtch in the gear menu: icon, version, a link to the latest release. still no network code. the link opens your browser.
+- clipboard rows lift under the pointer, dip on press and pop when copied.
+- the audio question comes when nxtch opens, not when something first plays, and the notch no longer freezes until you answer it.
+- the notch is on screen 0.3 s after launch. it used to wait 1 - 2 s for the audio taps when music was playing.
+
+- lighter at rest: an invisible window the size of the notch tells nxtch the pointer arrived, so the routine pointer check runs once a second. 1 wakeup a second at rest, down from 3. with music playing nothing changed. the cost: hovering while another app's menu is open can take up to a second.
+- one app for apple silicon and intel, 1.4 MB. the intel half has never been run, i dont have one.
+- macs without a notch: the pill sits on the menu bar's screen, as tall as the menu bar. the icons beside the notch and the open width follow the notch size. checked at four pretend sizes, not on a second mac.
+- a guess: on one macbook air on macos 26.6 the notch drew a step behind, shut while open and open after closing. i couldnt reproduce it. nxtch now redraws right after it opens or closes. unproven.
+- if macos refuses the tap-only audio device from 0.6.2, the meter goes back to the 0.6.1 way. that fallback has never fired on my mac.
+
 ## 0.6.2 - 2026-11-11
 
 lighter at rest and while music plays, a meters switch, a shortcut picker, and fixes from a second audit.
