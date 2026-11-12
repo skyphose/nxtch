@@ -104,7 +104,7 @@ private struct ClosedContent: View {
     var body: some View {
         HStack(spacing: 0) {
             if showEars {
-                if let owner = model.primaryApp {
+                if model.primaryApp != nil {
                     // Every playing app on the left, the meter's app first. One meter on the right.
                     HStack(spacing: NotchViewModel.earIconGap) {
                         ForEach(model.playingApps.prefix(NotchViewModel.maxEarIcons)) { app in
@@ -115,7 +115,7 @@ private struct ClosedContent: View {
                     .frame(width: leftEar)
                     Spacer(minLength: vm.geometry.notchSize.width)
                     if showMeter {
-                        LevelMeter(state: model.meter(owner.id), colors: model.playingColors)
+                        LevelMeter(state: model.mixMeter, colors: model.playingColors)
                             .frame(width: (vm.earIcon * 0.89).rounded(), height: (vm.earIcon * 0.78).rounded())
                             .frame(width: vm.earWidth)
                     }

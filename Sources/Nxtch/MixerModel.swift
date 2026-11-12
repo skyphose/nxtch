@@ -23,7 +23,7 @@ struct AppEntry: Identifiable, Equatable {
 /// Which apps get a listen-only metering tap. Volume taps are unaffected.
 enum MeterScope {
     case none       // no meter on screen
-    case primary    // closed notch with ears: only the app shown in the ears
+    case primary    // closed notch with ears: one tap of every playing app, mixed
     case all        // media tab open: every playing app
 }
 
@@ -51,6 +51,27 @@ final class MixerModel: ObservableObject {
     /// The closed notch meters the now-playing app, so move its tap when that app changes.
     func nowPlayingOwnerChanged() { if meterScope == .primary { resync() } }
 
+    /// The closed notch's meter listens to every playing app at once, through one tap of all
+    /// their processes. One tap costs the same whatever it covers, and the meter doesn't go
+    /// flat when the app listed first happens to be the quiet one.
+    @Published private var mixTap: AppVolumeTap?
+    private let mixState = TapState(1)
+    var mixMeter: TapState? { mixTap != nil ? mixState : nil }
+
+    private func syncMix(outputUID: String?) {
+        let objects = meterScope == .primary && tapsAllowed
+            ? apps.filter(\.isPlaying).reduce(into: Set<AudioObjectID>()) { $0.formUnion($1.processObjects) } : []
+        guard !objects.isEmpty, let outputUID else {
+            if mixTap != nil { mixTap = nil }
+            return
+        }
+        if let tap = mixTap, tap.processObjects == objects { return }
+        if mixTap != nil { mixTap = nil }   // the old tap must be gone before the new one starts
+        let began = Date()
+        mixTap = try? AppVolumeTap(processObjects: objects, outputUID: outputUID, passthrough: true, state: mixState)
+        Log.audio.info("mix tap \(self.mixTap == nil ? "failed" : "started", privacy: .public) processes=\(objects.count, privacy: .public) ms=\(Int(Date().timeIntervalSince(began) * 1000), privacy: .public)")
+    }
+
     /// Which apps are tapped. Published so a meter's view is rebuilt when its tap moves to
     /// another app: otherwise the closed notch kept showing the old app's meter, gone flat.
     @Published private var taps: [String: AppVolumeTap] = [:]
@@ -77,7 +98,7 @@ final class MixerModel: ObservableObject {
             MainActor.assumeIsolated { self?.scheduleRefresh() }
         }
         CA.listen(CA.system, kAudioHardwarePropertyDefaultOutputDevice) { [weak self] in
-            MainActor.assumeIsolated { self?.taps.removeAll(); self?.refresh() }
+            MainActor.assumeIsolated { self?.taps.removeAll(); self?.mixTap = nil; self?.refresh() }
         }
         // Changes arrive as Core Audio notifications. This slow timer is a safety net and ages
         // out "recently played".
@@ -168,6 +189,7 @@ final class MixerModel: ObservableObject {
     private func resync() {
         let uid = CA.deviceUID(CA.defaultOutputDevice)
         for app in apps { apply(app.id, outputUID: uid) }
+        syncMix(outputUID: uid)
     }
 
     /// Coalesces bursts of Core Audio notifications into one refresh.
@@ -186,7 +208,7 @@ final class MixerModel: ObservableObject {
         switch meterScope {
         case .none: wantsMeter = false
         case .all: wantsMeter = true
-        case .primary: wantsMeter = primaryApp?.id == id
+        case .primary: wantsMeter = false   // the mix tap covers the closed notch
         }
         guard tapsAllowed, let entry = apps.first(where: { $0.id == id }), !entry.processObjects.isEmpty,
               needsVolume || (entry.isPlaying && wantsMeter), let outputUID else {

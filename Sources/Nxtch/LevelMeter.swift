@@ -54,11 +54,17 @@ final class MeterClock {
         timer = t
     }
 
+    /// `-debugLevels YES` on the command line logs whether the meters have sound, about once a second.
+    private let debug = UserDefaults.standard.bool(forKey: "debugLevels")
+    private var ticks = 0
+
     private func tick() {
         let live = meters.allObjects
         guard !live.isEmpty else { stop(); return }
         var loud = false
         for meter in live where meter.tick() { loud = true }
+        ticks += 1
+        if debug, ticks % (loud ? 10 : 4) == 0 { Log.audio.info("meters=\(live.count, privacy: .public) sound=\(loud, privacy: .public)") }
         silentTicks = loud ? 0 : silentTicks + 1
         if !loud, silentTicks > 10, interval == Self.active { schedule(Self.idle) }
         else if loud, interval == Self.idle { schedule(Self.active) }

@@ -105,7 +105,7 @@ whats playing (title, artist, progress, the app its in) with previous, play/paus
 
 - a slider sticks to 100% as it passes, within 2%. hold ⇧ while dragging to turn that off.
 - the reset button puts every app back to 100%. its at the top right of the media tab, and only shows when an app is muted or off 100%.
-- closed, the notch shows an icon for every app making sound on its left. up to four. one level meter sits on the right, and its bars follow the first app only.
+- closed, the notch shows an icon for every app making sound on its left. up to four. one level meter sits on the right, and its bars follow all of them mixed together.
 - the meter takes its color from the icons: green for spotify, orange for firefox. two apps fade from one color to the other. three or more make a wheel.
 - level meters in the gear menu turns every meter off. that also stops the audio taps behind them, the biggest cost while music plays. volume still works.
 - an icon with several colors gets one blended color, so chrome comes out orange too. chrome and firefox toegther is a flat orange. an icon with no real color gives white.

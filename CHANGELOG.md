@@ -7,6 +7,7 @@ newest first. every version is a git tag, so `git checkout v0.3.0` gets you that
 for macbooks with a notch, and only those. and 22 MB lighter when nothing is playing.
 
 - the now-playing helper only runs while an app is playing or the notch is open, and quits 2 minutes after. it was a second process of about 22 MB running all day, more than nxtch's own 14. the cost: a paused track is forgotten after those 2 minutes and comes back about a second after you open the notch.
+- fixed: the meter beside the closed notch went flat whenever the app listed first was the quiet one, easy to hit with three apps playing. it listens to every playing app now, mixed, through one tap. same cost as before, and the tap is no longer rebuilt each time the first app changes.
 - the intel build from 0.6.3 is gone. every mac with a notch is apple silicon, so it could only ever serve macs nxtch isnt for, and i never ran it. the app is 0.7 MB again, half of 0.6.3.
 - the pill on a display without a notch stays. its what you get with the lid shut on an external display.
 
