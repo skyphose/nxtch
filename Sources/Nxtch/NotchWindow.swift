@@ -475,5 +475,18 @@ final class NotchController {
         }
         setIgnoresMouse(!(open && hits(openShapeRect, NSEvent.mouseLocation)))
         updateMeterScope()
+        // On one Mac the panel drew a state behind: shut while open, open after closing. Not
+        // reproduced, so this is a guess: push the change to the screen now and once it settles.
+        redraw()
+        after(0.4) { [weak self] in self?.redraw() }
+    }
+
+    private func redraw() {
+        guard let view = panel.contentView else { return }
+        view.needsLayout = true
+        view.layoutSubtreeIfNeeded()
+        view.needsDisplay = true
+        panel.displayIfNeeded()
+        CATransaction.flush()
     }
 }
