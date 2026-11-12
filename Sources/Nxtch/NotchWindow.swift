@@ -23,6 +23,29 @@ final class NotchPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
+/// An invisible window the size of the hardware notch. It tells nxtch the moment the cursor
+/// arrives, so the cursor check doesn't have to run 3 times a second all day waiting for it.
+final class NotchSensor: NSPanel {
+    var entered: (@MainActor () -> Void)?
+
+    init() {
+        super.init(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        isOpaque = false
+        backgroundColor = .clear
+        hasShadow = false
+        isMovable = false
+        isReleasedWhenClosed = false
+        level = NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue + 2)   // just under the panel
+        let view = NSView()
+        view.addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                                            owner: self, userInfo: nil))
+        contentView = view
+    }
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+    override func mouseEntered(with event: NSEvent) { entered?() }
+}
+
 /// Geometry of the physical notch on the screen we live on.
 struct NotchGeometry: Equatable {
     var notchSize: CGSize
@@ -148,6 +171,7 @@ final class NotchViewModel: ObservableObject {
 @MainActor
 final class NotchController {
     private let panel: NotchPanel
+    private let sensor = NotchSensor()
     private let model: MixerModel
     private let nowPlaying: NowPlayingMonitor
     private let settings: AppSettings
@@ -166,7 +190,7 @@ final class NotchController {
     // Drag detection: a drag is in progress when a mouse button is down and the drag pasteboard
     // has changed since the button went down.
     private var buttonWasDown = false
-    private var dragBaseline = 0
+    private var dragBaseline = NSPasteboard(name: .drag).changeCount
     private var contentDragActive = false
 
     private static let panelSize = CGSize(width: 680, height: 520)
@@ -190,6 +214,8 @@ final class NotchController {
         position()
         panel.orderFrontRegardless()
         panel.ignoresMouseEvents = true
+        sensor.entered = { [weak self] in self?.setPollInterval(Self.fastPoll); self?.trackMouse() }
+        sensor.orderFrontRegardless()
 
         observeSettings()
         observeSystem()
@@ -209,6 +235,8 @@ final class NotchController {
         if panel.collectionBehavior != b {
             panel.collectionBehavior = b
             panel.orderFrontRegardless()
+            sensor.collectionBehavior = b
+            sensor.orderFrontRegardless()
         }
         clipboard.enabled = settings.clipboardEnabled
         if let hotkey, settings.clipboardShortcut != appliedShortcut {
@@ -289,6 +317,8 @@ final class NotchController {
         let f = screen.frame
         let s = Self.panelSize
         panel.setFrame(NSRect(x: f.midX - s.width / 2, y: f.maxY - s.height, width: s.width, height: s.height), display: true)
+        let n = geo.notchSize
+        sensor.setFrame(NSRect(x: f.midX - n.width / 2, y: f.maxY - n.height, width: n.width, height: n.height), display: false)
     }
 
     // MARK: Geometry
@@ -329,41 +359,42 @@ final class NotchController {
     }
 
     private func updateDragState(buttonDown: Bool) {
-        // Reading a pasteboard is a cross-process call, so only do it while a button is held.
+        // Reading a pasteboard is a cross-process call, so do it while a button is held, and once
+        // per slow check while none is: the slow check can first see a button a second after it
+        // went down, when the drag has already started, so the baseline has to be from before.
         if buttonDown {
             let count = NSPasteboard(name: .drag).changeCount
-            if !buttonWasDown { dragBaseline = count }
             if count != dragBaseline, !contentDragActive {
                 contentDragActive = true
                 Log.notch.info("content drag detected")
             }
         } else {
             contentDragActive = false
+            if pollInterval == Self.slowPoll || buttonWasDown { dragBaseline = NSPasteboard(name: .drag).changeCount }
         }
         buttonWasDown = buttonDown
     }
 
-    /// The cursor check runs 10 times a second near the notch, while it's open, or while a button
-    /// is held (a drag may be on its way), and 3 times a second otherwise. The check itself is a
-    /// round trip to the window server, and this timer is most of nxtch's wakeups at rest.
+    /// The cursor check runs 10 times a second on the notch, while it's open, or while a button
+    /// is held (a drag may be on its way), and once a second otherwise. The sensor window starts
+    /// the fast check the moment the cursor reaches the notch. The slow one is there for held
+    /// buttons, and for a hover the sensor misses (macOS sends it nothing while a menu is open).
     private static let fastPoll: TimeInterval = 0.1
-    private static let slowPoll: TimeInterval = 0.33
-    /// How far below the top of the screen counts as near the notch.
-    private static let nearTop: CGFloat = 120
+    private static let slowPoll: TimeInterval = 1
     private var pollInterval: TimeInterval = 0
 
     private func setPollInterval(_ interval: TimeInterval) {
         guard interval != pollInterval else { return }
         pollInterval = interval
         pollTimer?.invalidate()
-        pollTimer = .repeating(interval, tolerance: interval * 0.3) { [weak self] in self?.trackMouse() }
+        pollTimer = .repeating(interval, tolerance: interval == Self.slowPoll ? 0.5 : 0.03) { [weak self] in self?.trackMouse() }
     }
 
     private func trackMouse() {
         let p = NSEvent.mouseLocation
         let buttonDown = mouseButtonDown
         updateDragState(buttonDown: buttonDown)
-        let near = vm.isOpen || buttonDown || p.y > vm.geometry.screenFrame.maxY - Self.nearTop
+        let near = vm.isOpen || buttonDown || openWork != nil || hits(notchTriggerRect.insetBy(dx: -12, dy: -12), p)
         setPollInterval(near ? Self.fastPoll : Self.slowPoll)
 
         if vm.isOpen {
