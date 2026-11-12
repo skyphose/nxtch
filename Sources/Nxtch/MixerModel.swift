@@ -178,7 +178,11 @@ final class MixerModel: ObservableObject {
         }
         guard let entry = apps.first(where: { $0.id == id }), !entry.processObjects.isEmpty,
               needsVolume || (entry.isPlaying && wantsMeter), let outputUID else {
-            if taps[id] != nil { taps[id] = nil }
+            if taps[id] != nil {
+                let began = Date()
+                taps[id] = nil
+                Log.audio.info("tap stopped app=\(id, privacy: .public) ms=\(Int(Date().timeIntervalSince(began) * 1000), privacy: .public)")
+            }
             return
         }
         let state = states[id] ?? TapState(gain)
@@ -187,11 +191,13 @@ final class MixerModel: ObservableObject {
 
         if let tap = taps[id], tap.processObjects == entry.processObjects,
            tap.outputUID == outputUID, tap.passthrough == !needsVolume { return }
+        let began = Date()
         if taps[id] != nil { taps[id] = nil }   // the old tap must be gone before the new one starts
         do {
             taps[id] = try AppVolumeTap(processObjects: entry.processObjects, outputUID: outputUID,
                                         passthrough: !needsVolume, state: state)
             if lastError != nil { lastError = nil }
+            Log.audio.info("tap started app=\(id, privacy: .public) volume=\(needsVolume, privacy: .public) ms=\(Int(Date().timeIntervalSince(began) * 1000), privacy: .public)")
         } catch {
             lastError = "\(entry.name): \(error)"
             NSLog("nxtch: \(error)")
@@ -205,10 +211,17 @@ final class MixerModel: ObservableObject {
         let me = ProcessInfo.processInfo.processIdentifier
         let processes = AudioProcess.all()
 
-        // Listen for each process starting or stopping output instead of polling.
+        // Listen for each process starting or stopping audio instead of polling. macOS announces
+        // IsRunning and, measured here, never IsRunningOutput, which is the one nxtch reads. So it
+        // listens to both, and looks twice: the output flag can settle a moment after the notice.
         for proc in processes where !listened.contains(proc.objectID) {
-            CA.listen(proc.objectID, kAudioProcessPropertyIsRunningOutput) { [weak self] in
-                MainActor.assumeIsolated { self?.scheduleRefresh() }
+            for selector in [kAudioProcessPropertyIsRunning, kAudioProcessPropertyIsRunningOutput] {
+                CA.listen(proc.objectID, selector) { [weak self] in
+                    MainActor.assumeIsolated {
+                        self?.scheduleRefresh()
+                        after(0.5) { self?.scheduleRefresh() }
+                    }
+                }
             }
         }
         listened = Set(processes.map(\.objectID))
@@ -244,11 +257,21 @@ final class MixerModel: ObservableObject {
             visible[i] = AppEntry(id: e.id, name: e.name, icon: icon, tint: tints[e.id] ?? .white,
                                   processObjects: e.processObjects, isPlaying: e.isPlaying)
         }
-        if visible != apps { apps = visible }
+        if visible != apps {
+            apps = visible
+            Log.audio.info("apps: \(visible.map { $0.name + ($0.isPlaying ? "*" : "") }.joined(separator: ", "), privacy: .public)")
+        }
 
         let ids = Set(visible.map(\.id))
         for id in taps.keys where !ids.contains(id) { taps[id] = nil }
-        let uid = CA.deviceUID(output)
-        for app in visible { apply(app.id, outputUID: uid) }
+        // Taps start on the next pass of the run loop, not here: starting one can take a second,
+        // and the list above should reach the screen (the icons beside the notch) first.
+        guard !tapsPending else { return }
+        tapsPending = true
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated { self?.tapsPending = false; self?.resync() }
+        }
     }
+
+    private var tapsPending = false
 }

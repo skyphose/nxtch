@@ -50,6 +50,7 @@ extension Animation {
 enum Log {
     static let subsystem = "dev.nxtch.app"
     static let notch = Logger(subsystem: subsystem, category: "notch")
+    static let audio = Logger(subsystem: subsystem, category: "audio")
     static let shelf = Logger(subsystem: subsystem, category: "shelf")
     static let clipboard = Logger(subsystem: subsystem, category: "clipboard")
     static let memory = Logger(subsystem: subsystem, category: "memory")
