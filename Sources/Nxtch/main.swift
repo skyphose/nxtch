@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.nowPlaying = nowPlaying
         notch = NotchController(model: model, nowPlaying: nowPlaying, settings: settings, shelf: shelf, clipboard: clipboard)
         watchdog = MemoryWatchdog()
+        AudioPermission.ask { [weak model] in model?.audioPermissionAnswered() }
     }
 
     func applicationWillTerminate(_ notification: Notification) { nowPlaying?.stop() }

@@ -151,6 +151,15 @@ final class MixerModel: ObservableObject {
         }
     }
 
+    /// False until the launch permission question has been answered. No tap starts before that:
+    /// a tap started on the main thread would freeze the notch for as long as the question is up.
+    private var tapsAllowed = false
+
+    func audioPermissionAnswered() {
+        tapsAllowed = true
+        resync()
+    }
+
     private func gain(_ id: String) -> Float { muted.contains(id) ? 0 : (volumes[id] ?? 1) }
 
     private func resync() {
@@ -176,7 +185,7 @@ final class MixerModel: ObservableObject {
         case .all: wantsMeter = true
         case .primary: wantsMeter = primaryApp?.id == id
         }
-        guard let entry = apps.first(where: { $0.id == id }), !entry.processObjects.isEmpty,
+        guard tapsAllowed, let entry = apps.first(where: { $0.id == id }), !entry.processObjects.isEmpty,
               needsVolume || (entry.isPlaying && wantsMeter), let outputUID else {
             if taps[id] != nil {
                 let began = Date()

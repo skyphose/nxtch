@@ -1,12 +1,14 @@
 #!/bin/zsh
 # Builds Nxtch.app next to this script.
-# Usage: ./build.sh [--run] [--install] [--uninstall]
+# Usage: ./build.sh [--run] [--install] [--uninstall] [--make-cert]
 #   --install    copies it to /Applications and runs it from there
 #   --uninstall  removes the app, its settings, its data and its permissions (builds nothing)
+#   --make-cert  makes a signing certificate for this Mac, once (builds nothing)
 #
-# Signs with your "Apple Development" certificate when one is valid, so macOS keeps the audio and
-# Accessibility grants across rebuilds. Without one it signs ad hoc, and macOS may ask again after
-# every build. Set SIGN_ID to pick a specific identity.
+# macOS remembers the audio and Accessibility grants by who signed the app. Signed ad hoc, every
+# build is a stranger and macOS asks again. So this signs with, in order: SIGN_ID if you set it,
+# your "Apple Development" certificate, or the "nxtch signing" certificate that --make-cert puts
+# in your login keychain. With any of those you are asked once and it sticks across rebuilds.
 set -euo pipefail
 cd "$(dirname "$0")"
 if [[ $EUID -eq 0 ]]; then echo "Run build.sh as yourself, not with sudo." >&2; exit 1; fi
@@ -18,6 +20,29 @@ is_nxtch() {
   [[ "${1:t}" == "$APP" && ! -L "$1" &&
      "$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$1/Contents/Info.plist" 2>/dev/null)" == "$BUNDLE_ID" ]]
 }
+
+CERT_NAME="nxtch signing"
+
+# A self-signed code signing certificate, kept in your login keychain. It only means "built on
+# this Mac": it is not from Apple, and Gatekeeper trusts it no more than an ad hoc signature.
+if [[ " $* " == *" --make-cert "* ]]; then
+  if security find-identity -p codesigning | grep -q "\"$CERT_NAME\""; then
+    echo "You already have a \"$CERT_NAME\" certificate. Nothing to do."; exit 0
+  fi
+  TMP=$(mktemp -d) && trap 'rm -rf "$TMP"' EXIT
+  PASS=$(/usr/bin/openssl rand -hex 16)
+  # /usr/bin/openssl on purpose: a newer openssl writes a .p12 that the keychain cant read.
+  /usr/bin/openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=$CERT_NAME" \
+    -addext "keyUsage=critical,digitalSignature" -addext "extendedKeyUsage=critical,codeSigning" \
+    -keyout "$TMP/key.pem" -out "$TMP/cert.pem" 2>/dev/null
+  /usr/bin/openssl pkcs12 -export -inkey "$TMP/key.pem" -in "$TMP/cert.pem" -name "$CERT_NAME" \
+    -out "$TMP/id.p12" -passout "pass:$PASS"
+  # Only codesign may use the key without asking.
+  security import "$TMP/id.p12" -k "$HOME/Library/Keychains/login.keychain-db" -P "$PASS" -T /usr/bin/codesign >/dev/null
+  echo "Made the \"$CERT_NAME\" certificate in your login keychain. Builds from now on are signed with it."
+  echo "macOS may ask once to let codesign use the key: choose Always Allow."
+  exit 0
+fi
 
 if [[ " $* " == *" --uninstall "* ]]; then
   INSTALLED="/Applications/$APP"
@@ -61,6 +86,8 @@ cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
 SIGN_ID=${SIGN_ID:-$(security find-identity -v -p codesigning | awk -F'"' '/Apple Development/ {print $2; exit}')}
+# Not -v: a self-signed certificate is never "valid" to macOS, and codesign doesnt need it to be.
+SIGN_ID=${SIGN_ID:-$(security find-identity -p codesigning | awk -F'"' -v n="$CERT_NAME" '$2 == n {print $2; exit}')}
 # Hardened runtime blocks DYLD_INSERT_LIBRARIES injection into nxtch and its permissions.
 codesign --force --options runtime --sign "${SIGN_ID:--}" "$APP"
 echo "Built $(pwd)/$APP (signed: ${SIGN_ID:-ad hoc})"

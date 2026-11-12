@@ -56,6 +56,49 @@ enum CA {
     }
 }
 
+/// macOS asks "nxtch would like to record your system audio" the first time a tap starts, and
+/// that start waits for the answer. So nxtch asks once, right at launch and off the main thread:
+/// a tap of nothing in particular is started and thrown away. The notch stays usable while the
+/// question is up, and the real taps wait for `done`. Already allowed, this takes a moment and
+/// shows nothing.
+enum AudioPermission {
+    static func ask(done: @escaping @MainActor () -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let desc = CATapDescription(stereoGlobalTapButExcludeProcesses: [])
+            desc.uuid = UUID()
+            desc.name = "nxtch permission check"
+            desc.isPrivate = true
+            desc.muteBehavior = .unmuted
+            var tap = AudioObjectID(kAudioObjectUnknown), device = AudioObjectID(kAudioObjectUnknown)
+            var proc: AudioDeviceIOProcID?
+            let began = Date()
+            var status = AudioHardwareCreateProcessTap(desc, &tap)
+            if status == noErr {
+                let aggregate: [String: Any] = [
+                    kAudioAggregateDeviceNameKey: "nxtch",
+                    kAudioAggregateDeviceUIDKey: "dev.nxtch.permission.\(UUID().uuidString)",
+                    kAudioAggregateDeviceIsPrivateKey: true,
+                    kAudioAggregateDeviceTapAutoStartKey: true,
+                    kAudioAggregateDeviceTapListKey: [[kAudioSubTapUIDKey: desc.uuid.uuidString]],
+                ]
+                status = AudioHardwareCreateAggregateDevice(aggregate as CFDictionary, &device)
+                if status == noErr {
+                    status = AudioDeviceCreateIOProcIDWithBlock(&proc, device, DispatchQueue.global(qos: .utility)) { _, _, _, _, _ in }
+                }
+                if status == noErr, let proc {
+                    status = AudioDeviceStart(device, proc)   // the question appears here, and this waits for the answer
+                    AudioDeviceStop(device, proc)
+                    AudioDeviceDestroyIOProcID(device, proc)
+                }
+                if device != kAudioObjectUnknown { AudioHardwareDestroyAggregateDevice(device) }
+                AudioHardwareDestroyProcessTap(tap)
+            }
+            Log.audio.info("permission check status=\(status, privacy: .public) ms=\(Int(Date().timeIntervalSince(began) * 1000), privacy: .public)")
+            DispatchQueue.main.async { MainActor.assumeIsolated(done) }
+        }
+    }
+}
+
 /// One Core Audio process object: any process that has opened an audio client.
 struct AudioProcess {
     let objectID: AudioObjectID
