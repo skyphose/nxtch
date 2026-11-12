@@ -42,14 +42,10 @@ struct NotchView: View {
     private var bottomRadius: CGFloat { vm.isOpen ? 24 : 12 }
     private var earsVisible: Bool { settings.showEars && (model.anyPlaying || !shelf.isEmpty) }
 
-    /// The left ear holds an icon per playing app, the right ear one meter. The ears can differ
-    /// in width, so the closed shape is shifted to keep the hardware notch in its middle.
-    private var leftEar: CGFloat { earsVisible ? NotchViewModel.leftEarWidth(icons: model.playingApps.count) : 0 }
-    /// The right ear holds the meter while audio plays (the shelf count otherwise), so with
-    /// meters off and audio playing there's no right ear.
-    private var rightEar: CGFloat {
-        earsVisible && (settings.showMeters || model.primaryApp == nil) ? NotchViewModel.earWidth : 0
-    }
+    /// The ears can differ in width, so the closed shape is shifted to keep the hardware notch
+    /// in its middle.
+    private var leftEar: CGFloat { vm.ears(settings: settings, model: model, shelf: shelf).left }
+    private var rightEar: CGFloat { vm.ears(settings: settings, model: model, shelf: shelf).right }
 
     var body: some View {
         let size = vm.isOpen
@@ -113,22 +109,22 @@ private struct ClosedContent: View {
                     HStack(spacing: NotchViewModel.earIconGap) {
                         ForEach(model.playingApps.prefix(NotchViewModel.maxEarIcons)) { app in
                             Image(nsImage: app.icon).resizable().interpolation(.high)
-                                .frame(width: NotchViewModel.earIcon, height: NotchViewModel.earIcon)
+                                .frame(width: vm.earIcon, height: vm.earIcon)
                         }
                     }
                     .frame(width: leftEar)
                     Spacer(minLength: vm.geometry.notchSize.width)
                     if showMeter {
                         LevelMeter(state: model.meter(owner.id), colors: model.playingColors)
-                            .frame(width: 16, height: 14)
-                            .frame(width: NotchViewModel.earWidth)
+                            .frame(width: (vm.earIcon * 0.89).rounded(), height: (vm.earIcon * 0.78).rounded())
+                            .frame(width: vm.earWidth)
                     }
                 } else if !shelf.isEmpty {
-                    Image(systemName: "tray.full.fill").font(.system(size: 12))
-                        .frame(width: NotchViewModel.earWidth)
+                    Image(systemName: "tray.full.fill").font(.system(size: (vm.earIcon * 0.67).rounded()))
+                        .frame(width: vm.earWidth)
                     Spacer(minLength: vm.geometry.notchSize.width)
-                    Text("\(shelf.items.count)").font(.system(size: 12, weight: .semibold).monospacedDigit())
-                        .frame(width: NotchViewModel.earWidth)
+                    Text("\(shelf.items.count)").font(.system(size: (vm.earIcon * 0.67).rounded(), weight: .semibold).monospacedDigit())
+                        .frame(width: vm.earWidth)
                 }
             }
         }

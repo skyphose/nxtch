@@ -103,8 +103,13 @@ final class NotchViewModel: ObservableObject {
     static let openTopRadius: CGFloat = 19
     static let contentInset: CGFloat = openTopRadius + 12
 
-    static let openWidth: CGFloat = 560
-    static let earWidth: CGFloat = 34
+    /// The open notch is 560 wide, more when the hardware notch is wide enough (a scaled display
+    /// mode) that the tabs and buttons beside it would run short of room.
+    static let minOpenWidth: CGFloat = 560
+    static func openWidth(notchWidth: CGFloat) -> CGFloat {
+        max(minOpenWidth, notchWidth + 2 * (contentInset + 135))
+    }
+    var openWidth: CGFloat { Self.openWidth(notchWidth: geometry.notchSize.width) }
     static let rowHeight: CGFloat = 46
     static let maxMixerRows = 4
     static let nowPlayingHeight: CGFloat = 76
@@ -128,13 +133,27 @@ final class NotchViewModel: ObservableObject {
         tab = NotchTab(rawValue: UserDefaults.standard.string(forKey: "tab") ?? "") ?? .media
     }
 
-    static let earIcon: CGFloat = 18
+    /// The icons and meter beside the notch follow its height: 18 pt in the usual 32 pt notch,
+    /// smaller in a short one (the 24 pt bar of a display without a notch), larger in a tall one.
+    static func earIcon(notchHeight: CGFloat) -> CGFloat { min(22, max(14, (notchHeight * 0.5625).rounded())) }
+    static func earWidth(notchHeight: CGFloat) -> CGFloat { earIcon(notchHeight: notchHeight) + 16 }
+    var earIcon: CGFloat { Self.earIcon(notchHeight: geometry.notchSize.height) }
+    var earWidth: CGFloat { Self.earWidth(notchHeight: geometry.notchSize.height) }
     static let earIconGap: CGFloat = 3
     static let maxEarIcons = 4
 
     /// The left ear grows with the number of playing apps (up to `maxEarIcons`).
-    static func leftEarWidth(icons: Int) -> CGFloat {
-        earWidth + CGFloat(max(0, min(icons, maxEarIcons) - 1)) * (earIcon + earIconGap)
+    static func leftEarWidth(icons: Int, notchHeight: CGFloat) -> CGFloat {
+        earWidth(notchHeight: notchHeight)
+            + CGFloat(max(0, min(icons, maxEarIcons) - 1)) * (earIcon(notchHeight: notchHeight) + earIconGap)
+    }
+
+    /// Widths of the two ears. The left holds an icon per playing app, the right one meter (the
+    /// shelf count when nothing plays), so with meters off and audio playing there's no right ear.
+    func ears(settings: AppSettings, model: MixerModel, shelf: ShelfStore) -> (left: CGFloat, right: CGFloat) {
+        guard settings.showEars, model.anyPlaying || !shelf.isEmpty else { return (0, 0) }
+        return (Self.leftEarWidth(icons: model.playingApps.count, notchHeight: geometry.notchSize.height),
+                settings.showMeters || model.primaryApp == nil ? earWidth : 0)
     }
 
     func closedSize(leftEar: CGFloat, rightEar: CGFloat) -> CGSize {
@@ -152,7 +171,7 @@ final class NotchViewModel: ObservableObject {
         case .clipboard:
             body = 30 + CGFloat(Self.clipVisibleRows) * (Self.clipRowHeight + 1)
         }
-        return CGSize(width: Self.openWidth, height: geometry.notchSize.height + body + 10)
+        return CGSize(width: openWidth, height: geometry.notchSize.height + body + 10)
     }
 }
 
@@ -193,7 +212,8 @@ final class NotchController {
     private var dragBaseline = NSPasteboard(name: .drag).changeCount
     private var contentDragActive = false
 
-    private static let panelSize = CGSize(width: 680, height: 520)
+    /// Room for the open shape, its flared corners and its shadow.
+    private var panelSize: CGSize { CGSize(width: vm.openWidth + 120, height: 520) }
     private static let openDwell: TimeInterval = 0.15
     private static let closeDelay: TimeInterval = 0.3
 
@@ -315,18 +335,27 @@ final class NotchController {
         guard let (screen, geo) = NotchGeometry.current() else { return }
         vm.geometry = geo
         let f = screen.frame
-        let s = Self.panelSize
+        let s = panelSize
         panel.setFrame(NSRect(x: f.midX - s.width / 2, y: f.maxY - s.height, width: s.width, height: s.height), display: true)
-        let n = geo.notchSize
-        sensor.setFrame(NSRect(x: f.midX - n.width / 2, y: f.maxY - n.height, width: n.width, height: n.height), display: false)
+        placeSensor()
     }
 
     // MARK: Geometry
 
-    /// The hardware notch (plus a hair of slack). Nothing else can live here, so hovering it is never accidental.
-    private var notchTriggerRect: NSRect {
+    /// The closed shape: the hardware notch and the icons and meter beside it.
+    private var closedShapeRect: NSRect {
         let f = vm.geometry.screenFrame, n = vm.geometry.notchSize
-        return NSRect(x: f.midX - n.width / 2 - 4, y: f.maxY - n.height, width: n.width + 8, height: n.height)
+        let ears = vm.ears(settings: settings, model: model, shelf: shelf)
+        return NSRect(x: f.midX - n.width / 2 - ears.left, y: f.maxY - n.height, width: n.width + ears.left + ears.right, height: n.height)
+    }
+
+    /// Resting anywhere on the closed shape (plus a hair of slack) opens the notch.
+    private var notchTriggerRect: NSRect { closedShapeRect.insetBy(dx: -4, dy: 0) }
+
+    /// The sensor covers the closed shape, so it follows the ears as they come and go.
+    private func placeSensor() {
+        let r = closedShapeRect
+        if sensor.frame != r { sensor.setFrame(r, display: false) }
     }
 
     /// While dragging content, a more generous target around the notch.
@@ -396,6 +425,7 @@ final class NotchController {
         updateDragState(buttonDown: buttonDown)
         let near = vm.isOpen || buttonDown || openWork != nil || hits(notchTriggerRect.insetBy(dx: -12, dy: -12), p)
         setPollInterval(near ? Self.fastPoll : Self.slowPoll)
+        placeSensor()
 
         if vm.isOpen {
             let overShape = hits(openShapeRect, p)

@@ -245,11 +245,27 @@ final class MeterColorTests: XCTestCase {
 @MainActor
 final class LayoutTests: XCTestCase {
     func testLeftEarGrowsWithPlayingAppsUpToFour() {
-        let one = NotchViewModel.leftEarWidth(icons: 1)
-        XCTAssertEqual(one, NotchViewModel.earWidth)
-        XCTAssertGreaterThan(NotchViewModel.leftEarWidth(icons: 3), one)
-        XCTAssertEqual(NotchViewModel.leftEarWidth(icons: 9), NotchViewModel.leftEarWidth(icons: 4))
-        XCTAssertEqual(NotchViewModel.leftEarWidth(icons: 0), one)
+        let w = { NotchViewModel.leftEarWidth(icons: $0, notchHeight: 32) }
+        XCTAssertEqual(w(1), NotchViewModel.earWidth(notchHeight: 32))
+        XCTAssertGreaterThan(w(3), w(1))
+        XCTAssertEqual(w(9), w(4))
+        XCTAssertEqual(w(0), w(1))
+    }
+
+    func testEarsAndOpenWidthFollowTheNotch() {
+        let icon = NotchViewModel.earIcon
+        XCTAssertEqual(icon(32), 18)                 // the usual notch: what it always was
+        XCTAssertEqual(NotchViewModel.earWidth(notchHeight: 32), 34)
+        XCTAssertLessThan(icon(24), 18)              // a display with no notch: a 24 pt menu bar
+        XCTAssertLessThanOrEqual(icon(24) + 8, 24)   // and it still fits inside it
+        XCTAssertGreaterThan(icon(38), 18)
+        XCTAssertEqual(icon(10), 14)                 // never too small to read
+        XCTAssertEqual(icon(80), 22)                 // or bigger than the menu bar's own icons
+        let open = NotchViewModel.openWidth
+        XCTAssertEqual(open(185), NotchViewModel.minOpenWidth)
+        XCTAssertEqual(open(200), NotchViewModel.minOpenWidth)
+        // a wide notch: still 135 pt each side for the tabs and buttons
+        XCTAssertGreaterThanOrEqual((open(300) - 2 * NotchViewModel.contentInset - 300) / 2, 135)
     }
 
     func testShelfGrowsARowAtATimeUpToThree() {
@@ -262,6 +278,6 @@ final class LayoutTests: XCTestCase {
         // four tiles and the Delete zone fit across the open notch
         let n = CGFloat(NotchViewModel.shelfColumns)
         let row = n * NotchViewModel.shelfTileSize.width + (n - 1) * NotchViewModel.shelfSpacing
-        XCTAssertLessThanOrEqual(row + 8 + 110, NotchViewModel.openWidth - 2 * NotchViewModel.contentInset)
+        XCTAssertLessThanOrEqual(row + 8 + 110, NotchViewModel.minOpenWidth - 2 * NotchViewModel.contentInset)
     }
 }
