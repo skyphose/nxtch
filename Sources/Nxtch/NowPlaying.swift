@@ -68,9 +68,39 @@ final class NowPlayingMonitor: ObservableObject {
     private var buffer = Data()
     private var restartDelay: TimeInterval = 2
 
-    init() { launch() }
+    /// The helper is a second process of about 22 MB, more than nxtch itself. So it only runs
+    /// while it has something to report: an app is playing, or the notch is open. Two minutes
+    /// after both stop being true it quits, and what was playing is forgotten until it's back.
+    private var pipe: Pipe?
+    private var needed = false
+    private var stopWork: DispatchWorkItem?
+    private static let linger: TimeInterval = 120
 
-    func stop() { process?.terminationHandler = nil; process?.terminate() }
+    func setNeeded(_ now: Bool) {
+        guard now != needed else { return }
+        needed = now
+        stopWork?.cancel(); stopWork = nil
+        if now {
+            if process == nil { launch() }
+        } else {
+            stopWork = after(Self.linger) { [weak self] in self?.stopWork = nil; self?.stop() }
+        }
+    }
+
+    func stop() {
+        pipe?.fileHandleForReading.readabilityHandler = nil   // nothing late from the old helper
+        pipe = nil
+        process?.terminationHandler = nil
+        process?.terminate()
+        process = nil
+        buffer.removeAll()
+        if reported != nil || info != nil {
+            reported = nil
+            info = nil
+            ownerChanged?()
+        }
+        Log.audio.info("now-playing helper stopped")
+    }
 
     /// Sends a media command and flips the play state right away (the helper confirms within ~1 s).
     func send(_ key: MediaKey) {
@@ -98,7 +128,10 @@ final class NowPlayingMonitor: ObservableObject {
     }
 
     private func launch() {
+        guard needed, process == nil else { return }   // a restart that was queued before a stop
+        Log.audio.info("now-playing helper started")
         let pipe = Pipe()   // JXA console.log writes to stderr
+        self.pipe = pipe
         pipe.fileHandleForReading.readabilityHandler = { [weak self] h in
             let data = h.availableData
             guard !data.isEmpty else { return }
@@ -110,6 +143,7 @@ final class NowPlayingMonitor: ObservableObject {
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     guard let self else { return }
+                    self.process = nil
                     // Restart, backing off if it keeps dying right away.
                     self.restartDelay = Date().timeIntervalSince(started) > 60 ? 2 : min(self.restartDelay * 2, 300)
                     after(self.restartDelay) { self.launch() }

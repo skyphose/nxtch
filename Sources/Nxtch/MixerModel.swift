@@ -153,6 +153,9 @@ final class MixerModel: ObservableObject {
 
     /// False until the launch permission question has been answered. No tap starts before that:
     /// a tap started on the main thread would freeze the notch for as long as the question is up.
+    /// Called when the list of apps, or which of them are playing, changes.
+    var appsChanged: (@MainActor () -> Void)?
+
     private var tapsAllowed = false
 
     func audioPermissionAnswered() {
@@ -268,6 +271,7 @@ final class MixerModel: ObservableObject {
         }
         if visible != apps {
             apps = visible
+            appsChanged?()
             Log.audio.info("apps: \(visible.map { $0.name + ($0.isPlaying ? "*" : "") }.joined(separator: ", "), privacy: .public)")
         }
 

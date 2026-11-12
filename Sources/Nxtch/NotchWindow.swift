@@ -316,6 +316,9 @@ final class NotchController {
 
     private var appliedShortcut: ClipboardShortcut?
 
+    var isOpen: Bool { vm.isOpen }
+    var openChanged: (@MainActor () -> Void)?
+
     private func updateMeterScope() {
         if !settings.showMeters {
             model.meterScope = .none
@@ -561,6 +564,7 @@ final class NotchController {
         setIgnoresMouse(!(open && hits(openShapeRect, NSEvent.mouseLocation)))
         watchClicks(open)
         updateMeterScope()
+        openChanged?()
         // On one Mac the panel drew a state behind: shut while open, open after closing. Not
         // reproduced, so this is a guess: push the change to the screen now and once it settles.
         redraw()

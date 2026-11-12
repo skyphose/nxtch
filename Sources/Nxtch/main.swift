@@ -15,7 +15,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         nowPlaying.ownerChanged = { [weak model] in model?.nowPlayingOwnerChanged() }
         self.nowPlaying = nowPlaying
-        notch = NotchController(model: model, nowPlaying: nowPlaying, settings: settings, shelf: shelf, clipboard: clipboard)
+        let notch = NotchController(model: model, nowPlaying: nowPlaying, settings: settings, shelf: shelf, clipboard: clipboard)
+        self.notch = notch
+        // The now-playing helper runs only while an app plays or the notch is open.
+        let helper = { [weak model, weak nowPlaying, weak notch] in
+            guard let model, let nowPlaying, let notch else { return }
+            nowPlaying.setNeeded(model.anyPlaying || notch.isOpen)
+        }
+        model.appsChanged = helper
+        notch.openChanged = helper
+        helper()
         watchdog = MemoryWatchdog()
         AudioPermission.ask { [weak model] in model?.audioPermissionAnswered() }
     }

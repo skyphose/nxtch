@@ -157,7 +157,7 @@ with an ad hoc signature macos may ask again after every update. signing with yo
 
 **meters.** the tap callback splits each app's audio into four bands with one-pole filters. meters are drawn with `CALayer`s and only run where you can see them.
 
-**now playing.** since macos 15.4, `MediaRemote` only answers apple-signed programs. so nxtch asks through `osascript` (jxa), which is apple-signed. a long-running helper reports title, artist and position. it waits for macos to say something changed instead of checking every second, and quits when nxtch quits. the playback buttons send comamnds the same way, so they need no permission.
+**now playing.** since macos 15.4, `MediaRemote` only answers apple-signed programs. so nxtch asks through `osascript` (jxa), which is apple-signed. a helper reports title, artist and position. it only runs while an app is playing or the notch is open, and quits 2 minutes after. it waits for macos to say something changed instead of checking every second. the playback buttons send comamnds the same way, so they need no permission.
 
 **the notch panel.** a borderless, non-activating `NSPanel` above the menu bar. it tries hard to stay out of the way:
 
