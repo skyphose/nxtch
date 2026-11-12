@@ -54,6 +54,7 @@ struct ClipboardTab: View {
                         }
                         .padding(.horizontal, 5).padding(.vertical, 2)   // room for a lifted row to grow into
                     }
+                    .onHover { inside in if !inside { store.hovered = nil } }
                     .onChange(of: store.selection) { _, i in if i < items.count { proxy.scrollTo(items[i].id) } }
                 }
             }
@@ -100,9 +101,10 @@ private struct ClipRow: View {
         .buttonStyle(ClipRowStyle())
         .scaleEffect(scale)
         .shadow(color: .black.opacity(lifted ? 0.5 : 0), radius: 5, y: 2)
-        .onHover { inside in
-            if inside { store.hovered = item.id } else if store.hovered == item.id { store.hovered = nil }
-        }
+        // Only entering counts. Leaving a row says nothing, or the lift would jump to the
+        // keyboard's row for a moment each time the cursor crossed the gap between two rows.
+        // The list clears it when the cursor leaves the list.
+        .onHover { inside in if inside, store.hovered != item.id { store.hovered = item.id } }
         .animation(.spring(response: 0.22, dampingFraction: 0.6), value: lifted)
         .animation(.spring(response: 0.25, dampingFraction: 0.5), value: justCopied)
         .animation(.easeOut(duration: 0.12), value: picked)
