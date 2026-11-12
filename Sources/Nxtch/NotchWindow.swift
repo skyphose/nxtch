@@ -513,6 +513,7 @@ final class NotchController {
             shelf.prune()
             clipboard.expire()
             clipboard.selecting = false
+            clipboard.hovered = nil
             clipboard.pasteTarget = NSWorkspace.shared.frontmostApplication?.processIdentifier
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
         } else {

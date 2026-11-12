@@ -44,6 +44,8 @@ final class ClipboardStore: ObservableObject {
     @Published private(set) var items: [ClipItem] = []
     @Published var query = "" { didSet { selection = 0 } }
     @Published var selection = 0
+    /// The row under the cursor. It lifts like the keyboard's row, without moving the selection.
+    @Published var hovered: UUID?
     /// Set briefly after copying, for the check mark.
     @Published private(set) var justCopied: UUID?
     /// Select mode: rows show a check box, and a click picks a row instead of copying it.
@@ -208,6 +210,7 @@ final class ClipboardStore: ObservableObject {
     func expire() { if trim() { save() } }
 
     func moveSelection(_ delta: Int) {
+        hovered = nil   // the arrow keys take the lift back from the cursor
         selection = max(0, min(visible.count - 1, selection + delta))
     }
 

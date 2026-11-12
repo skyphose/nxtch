@@ -44,10 +44,15 @@ struct ClipboardTab: View {
                     ScrollView(.vertical, showsIndicators: false) {
                         LazyVStack(spacing: 1) {   // up to 100 rows, 6 visible
                             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                                ClipRow(item: item, store: store, selected: index == store.selection, selecting: store.selecting,
-                                        picked: store.picked.contains(item.id), justCopied: store.justCopied == item.id).id(item.id)
+                                let lifted = store.hovered == item.id || (store.hovered == nil && index == store.selection)
+                                ClipRow(item: item, store: store, selected: index == store.selection, lifted: lifted && !store.selecting,
+                                        selecting: store.selecting, picked: store.picked.contains(item.id),
+                                        justCopied: store.justCopied == item.id)
+                                    .zIndex(lifted ? 1 : 0)   // the lifted row draws over its neighbors
+                                    .id(item.id)
                             }
                         }
+                        .padding(.horizontal, 5).padding(.vertical, 2)   // room for a lifted row to grow into
                     }
                     .onChange(of: store.selection) { _, i in if i < items.count { proxy.scrollTo(items[i].id) } }
                 }
@@ -63,6 +68,8 @@ private struct ClipRow: View {
     /// moving the selection only rebuilds the rows that changed.
     let store: ClipboardStore
     let selected: Bool
+    /// Under the cursor, or the keyboard's row when the cursor is elsewhere: it floats a little.
+    let lifted: Bool
     let selecting: Bool
     let picked: Bool
     let justCopied: Bool
@@ -70,7 +77,46 @@ private struct ClipRow: View {
     /// App icons by bundle ID. Looking them up on every redraw is a disk hit per row.
     @MainActor private static var icons: [String: NSImage] = [:]
 
+    /// A row lifts with a small bounce and pops when it's copied. With Reduce Motion on it only
+    /// changes shade.
+    private var scale: CGFloat {
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion { return 1 }
+        return justCopied ? 1.02 : lifted ? 1.012 : 1
+    }
+
+    private var fill: Color {
+        if picked { return Color.accentColor.opacity(0.28) }
+        if justCopied { return .green.opacity(0.22) }
+        if lifted { return .white.opacity(0.16) }
+        return selected && !selecting ? .white.opacity(0.09) : .clear
+    }
+
     var body: some View {
+        // A button, so the row can dip while the mouse is down. In select mode a click picks the
+        // row. ⌘-click starts select mode from anywhere.
+        Button {
+            if selecting || NSEvent.modifierFlags.contains(.command) { store.togglePick(item) } else { store.copy(item) }
+        } label: { label }
+        .buttonStyle(ClipRowStyle())
+        .scaleEffect(scale)
+        .shadow(color: .black.opacity(lifted ? 0.5 : 0), radius: 5, y: 2)
+        .onHover { inside in
+            if inside { store.hovered = item.id } else if store.hovered == item.id { store.hovered = nil }
+        }
+        .animation(.spring(response: 0.22, dampingFraction: 0.6), value: lifted)
+        .animation(.spring(response: 0.25, dampingFraction: 0.5), value: justCopied)
+        .animation(.easeOut(duration: 0.12), value: picked)
+        .contextMenu {
+            Button("Paste") { store.paste(item) }
+            Button("Copy") { store.copy(item) }
+            Button(item.pinned ? "Unpin" : "Pin") { store.togglePin(item) }
+            Divider()
+            Button(picked ? "Deselect" : "Select") { store.togglePick(item) }
+            Button("Delete") { store.delete(item) }
+        }
+    }
+
+    private var label: some View {
         HStack(spacing: 8) {
             if selecting {
                 Image(systemName: picked ? "checkmark.circle.fill" : "circle")
@@ -96,22 +142,8 @@ private struct ClipRow: View {
         .foregroundStyle(.white)
         .padding(.horizontal, 8)
         .frame(height: NotchViewModel.clipRowHeight)
-        .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
-            .fill(picked ? Color.accentColor.opacity(0.28) : selected && !selecting ? .white.opacity(0.12) : .clear))
+        .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(fill))
         .contentShape(Rectangle())
-        // In select mode a click picks the row. ⌘-click starts select mode from anywhere.
-        .onTapGesture {
-            if selecting || NSEvent.modifierFlags.contains(.command) { store.togglePick(item) } else { store.copy(item) }
-        }
-        .animation(.easeOut(duration: 0.12), value: picked)
-        .contextMenu {
-            Button("Paste") { store.paste(item) }
-            Button("Copy") { store.copy(item) }
-            Button(item.pinned ? "Unpin" : "Pin") { store.togglePin(item) }
-            Divider()
-            Button(picked ? "Deselect" : "Select") { store.togglePick(item) }
-            Button("Delete") { store.delete(item) }
-        }
     }
 
     @ViewBuilder private var leading: some View {
@@ -131,5 +163,15 @@ private struct ClipRow: View {
         icon.size = NSSize(width: 22, height: 22)
         icons[id] = icon
         return icon
+    }
+}
+
+/// The row dips under the mouse and springs back on release.
+private struct ClipRowStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .brightness(configuration.isPressed ? 0.08 : 0)
+            .animation(.spring(response: 0.18, dampingFraction: 0.55), value: configuration.isPressed)
     }
 }
