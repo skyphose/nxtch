@@ -170,6 +170,7 @@ private struct OpenContent: View {
                         ForEach(ClipboardShortcut.allCases) { Text($0.title).tag($0) }
                     }
                     Divider()
+                    Button("About nxtch") { About.show() }
                     Button("Quit") { NSApp.terminate(nil) }
                 } label: {
                     Image(systemName: "gearshape.fill").font(.system(size: 11, weight: .semibold))
