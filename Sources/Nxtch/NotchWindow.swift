@@ -31,10 +31,19 @@ struct NotchGeometry: Equatable {
     /// A "fake notch" for displays without one.
     static let fallbackNotch = CGSize(width: 200, height: 32)
 
+    /// The screen with a notch. Without one (a desktop Mac, or a laptop with its lid shut), the
+    /// screen that holds the menu bar. Not `NSScreen.main`: that one follows keyboard focus, so
+    /// with two displays the notch would be worked out for whichever was last clicked.
     static func current() -> (NSScreen, NotchGeometry)? {
-        guard let screen = NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }) ?? NSScreen.main else { return nil }
+        guard let screen = NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }) ?? NSScreen.screens.first else { return nil }
         var size = fallbackNotch
-        if screen.safeAreaInsets.top > 0 { size.height = screen.safeAreaInsets.top }
+        if screen.safeAreaInsets.top > 0 {
+            size.height = screen.safeAreaInsets.top
+        } else {
+            // No notch: as tall as the menu bar, so the fake one doesn't hang below it.
+            let bar = screen.frame.maxY - screen.visibleFrame.maxY
+            if bar > 0 { size.height = min(bar, fallbackNotch.height) }
+        }
         if let l = screen.auxiliaryTopLeftArea, let r = screen.auxiliaryTopRightArea {
             size.width = screen.frame.width - l.width - r.width
         }
@@ -222,17 +231,15 @@ final class NotchController {
         nc.addObserver(forName: NSMenu.didEndTrackingNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.menuTracking = false; self?.trackMouse() }
         }
+        // Displays can come back from sleep rearranged without a screen-change notice.
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.position() }
+        }
         clipboard.requestClose = { [weak self] in self?.setOpen(false) }
     }
 
     /// Everything that listens for input: clicks elsewhere, Esc, the cursor check and the shortcut.
     private func installInput() {
-        // A click in another app closes nxtch. That's all nxtch watches system-wide: hover and
-        // drags come from the cursor check below, since watching every mouse move woke nxtch
-        // 60-120 times a second whenever the mouse moved anywhere.
-        if let g = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: { [weak self] _ in
-            MainActor.assumeIsolated { self?.clickedOutside() }
-        }) { monitors.append(g) }
         // Esc closes when the panel has keyboard focus.
         if let k = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { [weak self] e in
             if e.keyCode == UInt16(kVK_Escape) {
@@ -422,6 +429,22 @@ final class NotchController {
         return true
     }
 
+    /// A click in another app closes nxtch. That's all nxtch watches system-wide, and only while
+    /// open: closed, a click anywhere doesn't wake it. Hover and drags come from the cursor check,
+    /// since watching every mouse move woke nxtch 60-120 times a second.
+    private var clickMonitor: Any?
+
+    private func watchClicks(_ on: Bool) {
+        if on, clickMonitor == nil {
+            clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+                MainActor.assumeIsolated { self?.clickedOutside() }
+            }
+        } else if !on, let m = clickMonitor {
+            NSEvent.removeMonitor(m)
+            clickMonitor = nil
+        }
+    }
+
     private func clickedOutside() {
         guard vm.isOpen, !menuTracking, !hits(openShapeRect, NSEvent.mouseLocation) else { return }
         setOpen(false)
@@ -474,6 +497,7 @@ final class NotchController {
             vm.isOpen = open
         }
         setIgnoresMouse(!(open && hits(openShapeRect, NSEvent.mouseLocation)))
+        watchClicks(open)
         updateMeterScope()
         // On one Mac the panel drew a state behind: shut while open, open after closing. Not
         // reproduced, so this is a guess: push the change to the screen now and once it settles.

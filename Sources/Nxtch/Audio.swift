@@ -162,12 +162,19 @@ final class AppVolumeTap {
         self.outputUID = outputUID
         self.passthrough = passthrough
         self.state = state
-        do { try start() } catch { stop(); throw error }
+        do {
+            try start(tapOnly: passthrough)
+        } catch where passthrough {
+            // The tap-only device is only proven on the macOS versions I run. If one refuses it,
+            // listen the older way, through an aggregate that includes the output device.
+            stop()
+            do { try start(tapOnly: false) } catch { stop(); throw error }
+        } catch { stop(); throw error }
     }
 
     deinit { stop(); state.reset() }
 
-    private func start() throws {
+    private func start(tapOnly: Bool) throws {
         let desc = CATapDescription(stereoMixdownOfProcesses: Array(processObjects))
         desc.uuid = UUID()
         desc.name = "nxtch tap"
@@ -182,7 +189,7 @@ final class AppVolumeTap {
             kAudioAggregateDeviceIsStackedKey: false,
             kAudioAggregateDeviceTapAutoStartKey: true,
         ]
-        if passthrough {
+        if tapOnly {
             // Listening only: the tap alone, with no output device in the aggregate. nxtch then
             // isn't an output client of your speakers, and coreaudiod has no silent stream of
             // ours to mix: about 1 point less coreaudiod cpu, measured.
