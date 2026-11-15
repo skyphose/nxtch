@@ -152,29 +152,40 @@ enum ClipboardShortcut: String, CaseIterable, Identifiable {
     }
 }
 
-/// One system-wide shortcut through Carbon's RegisterEventHotKey (needs no permission). The
-/// event handler is installed once; changing the shortcut only swaps the registration.
+/// A system-wide shortcut through Carbon's RegisterEventHotKey (needs no permission). One event
+/// handler serves every shortcut and tells them apart by id; changing a shortcut only swaps its
+/// registration.
 final class Hotkey {
+    private let id: UInt32
     private var ref: EventHotKeyRef?
-    private static var handler: (() -> Void)?
+    private static var handlers: [UInt32: () -> Void] = [:]
 
-    init(_ handler: @escaping () -> Void) {
-        Self.handler = handler
+    init(id: UInt32, _ handler: @escaping () -> Void) {
+        self.id = id
+        let first = Self.handlers.isEmpty
+        Self.handlers[id] = handler
+        guard first else { return }
         var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-        InstallEventHandler(GetApplicationEventTarget(), { _, _, _ in
-            DispatchQueue.main.async { Hotkey.handler?() }
+        InstallEventHandler(GetApplicationEventTarget(), { _, event, _ in
+            var pressed = EventHotKeyID()
+            GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID), nil,
+                              MemoryLayout<EventHotKeyID>.size, nil, &pressed)
+            let id = pressed.id
+            DispatchQueue.main.async { Hotkey.handlers[id]?() }
             return noErr
         }, 1, &spec, nil, nil)
     }
 
-    /// Registers `shortcut`, replacing the previous one. Off just unregisters.
-    func set(_ shortcut: ClipboardShortcut) {
+    /// Registers the key, replacing the previous one. nil just unregisters.
+    func set(code: Int?, modifiers: Int = 0) {
         if let ref { UnregisterEventHotKey(ref); self.ref = nil }
-        guard let keys = shortcut.keys else { return }
-        let id = EventHotKeyID(signature: OSType(0x6E787463) /* 'nxtc' */, id: 1)
-        let status = RegisterEventHotKey(UInt32(keys.code), UInt32(keys.modifiers), id, GetApplicationEventTarget(), 0, &ref)
-        if status != noErr { Log.notch.error("hotkey not registered (\(status)); another app may own it") }
+        guard let code else { return }
+        let hotkey = EventHotKeyID(signature: OSType(0x6E787463) /* 'nxtc' */, id: id)
+        let status = RegisterEventHotKey(UInt32(code), UInt32(modifiers), hotkey, GetApplicationEventTarget(), 0, &ref)
+        if status != noErr { Log.notch.error("hotkey \(self.id, privacy: .public) not registered (\(status)); another app may own it") }
     }
+
+    func set(_ shortcut: ClipboardShortcut) { set(code: shortcut.keys?.code, modifiers: shortcut.keys?.modifiers ?? 0) }
 
     deinit { if let ref { UnregisterEventHotKey(ref) } }
 }

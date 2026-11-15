@@ -31,7 +31,7 @@ struct ClipboardTab: View {
                 if !enabled { Text("Paused").font(.system(size: 10, weight: .semibold)).foregroundStyle(.orange) }
             }
             .padding(.horizontal, 8)
-            .frame(height: 26)
+            .frame(height: 24)
             .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(.white.opacity(0.08)))
 
             let items = store.visible
@@ -125,10 +125,10 @@ private struct ClipRow: View {
                     .font(.system(size: 14))
                     .foregroundStyle(picked ? Color.accentColor : .white.opacity(0.35))
             }
-            leading.frame(width: 22, height: 22)
+            leading.frame(width: 18, height: 18)
             if item.kind == .image, let img = store.thumbnail(for: item) {
                 Image(nsImage: img).resizable().aspectRatio(contentMode: .fit)
-                    .frame(height: 24).clipShape(RoundedRectangle(cornerRadius: 3))
+                    .frame(height: 20).clipShape(RoundedRectangle(cornerRadius: 3))
             } else {
                 Text(item.preview).font(.system(size: 12)).lineLimit(1)
             }
@@ -162,7 +162,7 @@ private struct ClipRow: View {
         if let cached = icons[id] { return cached }
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) else { return nil }
         let icon = NSWorkspace.shared.icon(forFile: url.path)
-        icon.size = NSSize(width: 22, height: 22)
+        icon.size = NSSize(width: 18, height: 18)
         icons[id] = icon
         return icon
     }

@@ -125,7 +125,7 @@ final class NotchViewModel: ObservableObject {
         let rows = CGFloat(min(max(1, (items + shelfColumns - 1) / shelfColumns), shelfMaxRows))
         return 16 + rows * shelfTileSize.height + (rows - 1) * shelfSpacing + 3
     }
-    static let clipRowHeight: CGFloat = 32
+    static let clipRowHeight: CGFloat = 28
     static let clipVisibleRows = 6
 
     init(geometry: NotchGeometry) {
@@ -169,7 +169,7 @@ final class NotchViewModel: ObservableObject {
         case .shelf:
             body = Self.shelfHeight(items: shelfItems)
         case .clipboard:
-            body = 30 + CGFloat(Self.clipVisibleRows) * (Self.clipRowHeight + 1)
+            body = 28 + CGFloat(Self.clipVisibleRows) * (Self.clipRowHeight + 1)
         }
         return CGSize(width: openWidth, height: geometry.notchSize.height + body + 10)
     }
@@ -205,6 +205,7 @@ final class NotchController {
     private var pinnedOpen = false
     private var pollTimer: Timer?
     private var hotkey: Hotkey?
+    private var escape: Hotkey?
 
     // Drag detection: a drag is in progress when a mouse button is down and the drag pasteboard
     // has changed since the button went down.
@@ -274,10 +275,18 @@ final class NotchController {
         }
         // Keep the panel open while one of its menus (settings, context menus) is showing.
         nc.addObserver(forName: NSMenu.didBeginTrackingNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.menuTracking = true; self?.closeWork?.cancel(); self?.closeWork = nil }
+            MainActor.assumeIsolated {
+                self?.menuTracking = true; self?.closeWork?.cancel(); self?.closeWork = nil
+                self?.escape?.set(code: nil)   // Esc belongs to the menu while one is showing
+            }
         }
         nc.addObserver(forName: NSMenu.didEndTrackingNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.menuTracking = false; self?.trackMouse() }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.menuTracking = false
+                if self.vm.isOpen { self.escape?.set(code: kVK_Escape) }
+                self.trackMouse()
+            }
         }
         // Displays can come back from sleep rearranged without a screen-change notice.
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
@@ -307,8 +316,13 @@ final class NotchController {
         setPollInterval(Self.fastPoll)
 
         // ⌃⌥V by default: open the clipboard from anywhere. The gear menu changes or turns it off.
-        hotkey = Hotkey { [weak self] in
+        hotkey = Hotkey(id: 1) { [weak self] in
             MainActor.assumeIsolated { self?.toggleClipboard() }
+        }
+        // Esc closes the open notch from any app. Its only registered while the notch is open,
+        // so the rest of the time Esc is nobody's business but the app you're in.
+        escape = Hotkey(id: 2) { [weak self] in
+            MainActor.assumeIsolated { self?.setOpen(false) }
         }
         hotkey?.set(settings.clipboardShortcut)
         appliedShortcut = settings.clipboardShortcut
@@ -563,6 +577,7 @@ final class NotchController {
         }
         setIgnoresMouse(!(open && hits(openShapeRect, NSEvent.mouseLocation)))
         watchClicks(open)
+        escape?.set(code: open ? kVK_Escape : nil)
         updateMeterScope()
         openChanged?()
         // On one Mac the panel drew a state behind: shut while open, open after closing. Not
