@@ -137,6 +137,11 @@ final class TapState: @unchecked Sendable {
     private let gainPtr = UnsafeMutablePointer<Float>.allocate(capacity: 1)
     private let levelPtr = UnsafeMutablePointer<Float>.allocate(capacity: bandCount)
 
+    /// How far behind the app's own audio nxtch's copy plays, in host clock ticks, and the size
+    /// of the last buffer. Written by the audio thread, read for the debug log only.
+    var relayTicks: UInt64 = 0
+    var relayFrames = 0
+
     // Audio thread only.
     var current: Float
     var lp: (Float, Float, Float) = (0, 0, 0)
@@ -246,13 +251,53 @@ final class AppVolumeTap {
 
         state.configure(sampleRate: CA.get(aggregateID, kAudioDevicePropertyNominalSampleRate, Float64(48000)) ?? 48000)
         let state = self.state, passthrough = self.passthrough
-        try check(AudioDeviceCreateIOProcIDWithBlock(&ioProcID, aggregateID, queue) { _, input, _, output, _ in
+        // `-tapBufferFrames 128` on the command line asks for a smaller (or larger) buffer: less
+        // delay on a volume tap, more callbacks a second.
+        let wanted = UserDefaults.standard.integer(forKey: "tapBufferFrames")
+        if wanted > 0, !tapOnly {
+            var frames = UInt32(wanted), addr = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyBufferFrameSize,
+                                                                           mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+            AudioObjectSetPropertyData(aggregateID, &addr, 0, nil, UInt32(MemoryLayout<UInt32>.size), &frames)
+        }
+        try check(AudioDeviceCreateIOProcIDWithBlock(&ioProcID, aggregateID, queue) { _, input, inputTime, output, outputTime in
+            if !passthrough {
+                state.relayTicks = outputTime.pointee.mHostTime &- inputTime.pointee.mHostTime
+                state.relayFrames = Int(input.pointee.mBuffers.mDataByteSize) / (MemoryLayout<Float>.size * max(1, Int(input.pointee.mBuffers.mNumberChannels)))
+            }
             AppVolumeTap.render(input: input, output: output, state: state, passthrough: passthrough)
         }, "Creating IO proc")
         try check(AudioDeviceStart(aggregateID, ioProcID), "Starting aggregate device")
+        if !passthrough, UserDefaults.standard.bool(forKey: "debugLevels") { logDelay() }
+    }
+
+    private var delayTimer: DispatchSourceTimer?
+
+    /// With `-debugLevels YES`: what the volume path adds, every 2 seconds. The delay is the gap
+    /// between when the app's audio was captured and when nxtch's copy of it reaches the output.
+    private func logDelay() {
+        func out(_ device: AudioObjectID, _ selector: AudioObjectPropertySelector) -> UInt32 {
+            var addr = AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioObjectPropertyScopeOutput, mElement: kAudioObjectPropertyElementMain)
+            var value: UInt32 = 0, size = UInt32(MemoryLayout<UInt32>.size)
+            AudioObjectGetPropertyData(device, &addr, 0, nil, &size, &value)
+            return value
+        }
+        var tb = mach_timebase_info(); mach_timebase_info(&tb)
+        let rate = CA.get(aggregateID, kAudioDevicePropertyNominalSampleRate, Float64(48000)) ?? 48000
+        let buffer = CA.get(aggregateID, kAudioDevicePropertyBufferFrameSize, UInt32(0)) ?? 0
+        let device = aggregateID, state = self.state
+        Log.audio.info("volume tap: rate=\(Int(rate), privacy: .public) buffer=\(buffer, privacy: .public) frames latency=\(out(device, kAudioDevicePropertyLatency), privacy: .public) safety=\(out(device, kAudioDevicePropertySafetyOffset), privacy: .public)")
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + 2, repeating: 2)
+        timer.setEventHandler {
+            let ms = Double(state.relayTicks) * Double(tb.numer) / Double(tb.denom) / 1e6
+            Log.audio.info("volume tap delay=\(String(format: "%.2f", ms), privacy: .public) ms frames=\(state.relayFrames, privacy: .public)")
+        }
+        timer.resume()
+        delayTimer = timer
     }
 
     private func stop() {
+        delayTimer?.cancel(); delayTimer = nil
         if aggregateID != kAudioObjectUnknown {
             if let ioProcID {
                 AudioDeviceStop(aggregateID, ioProcID)
