@@ -2,6 +2,13 @@
 
 newest first. every version is a git tag, so `git checkout v0.3.0` gets you that build.
 
+## 0.6.5 - 2026-11-14
+
+esc from anywhere, and a smaller clipboard.
+
+- esc closes the open notch from any app. it used to work only while the clipboard search had focus. the cost: while the notch is open, esc goes to nxtch and not to the app underneath.
+- the clipboard tab is about 10% shorter: 28 pt rows, down from 32, with smaller icons and previews to match. still six rows.
+
 ## 0.6.4 - 2026-11-11
 
 for macbooks with a notch, and only those. and 22 MB lighter when nothing is playing.

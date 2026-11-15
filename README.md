@@ -42,7 +42,7 @@ download the zip from the [latest release](https://github.com/skyphose/nxtch/rel
 github builds that zip from the tagged source, not my laptop. the steps are in `.github/workflows/release.yml`. to check a zip came from there, with the [github cli](https://cli.github.com):
 
 ```bash
-gh attestation verify nxtch-v0.6.4.zip --repo skyphose/nxtch --source-ref refs/tags/v0.6.4 \
+gh attestation verify nxtch-v0.6.5.zip --repo skyphose/nxtch --source-ref refs/tags/v0.6.5 \
   --signer-workflow skyphose/nxtch/.github/workflows/release.yml
 ```
 
