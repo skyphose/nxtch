@@ -242,6 +242,20 @@ final class MeterColorTests: XCTestCase {
     }
 }
 
+final class KeyLayoutTests: XCTestCase {
+    func testVFollowsTheKeyboardLayout() {
+        // QWERTY: V is key 9. Dvorak: V is where QWERTY has the period, key 47.
+        XCTAssertEqual(KeyLayout.code(for: "v", layoutID: "com.apple.keylayout.US"), 9)
+        XCTAssertEqual(KeyLayout.code(for: "v", layoutID: "com.apple.keylayout.Dvorak"), 47)
+        // "Dvorak - QWERTY ⌘" types like Dvorak but takes shortcuts like QWERTY.
+        XCTAssertEqual(KeyLayout.code(for: "v", layoutID: "com.apple.keylayout.DVORAK-QWERTYCMD"), 47)
+        XCTAssertEqual(KeyLayout.code(for: "v", command: true, layoutID: "com.apple.keylayout.DVORAK-QWERTYCMD"), 9)
+        // AZERTY keeps V in the same place.
+        XCTAssertEqual(KeyLayout.code(for: "v", layoutID: "com.apple.keylayout.French"), 9)
+        XCTAssertNil(KeyLayout.code(for: "v", layoutID: "no.such.layout"))
+    }
+}
+
 @MainActor
 final class LayoutTests: XCTestCase {
     func testLeftEarGrowsWithPlayingAppsUpToFour() {

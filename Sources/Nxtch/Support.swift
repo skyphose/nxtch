@@ -127,6 +127,42 @@ final class MemoryWatchdog {
 
 /// The shortcut that opens clipboard history. A short list rather than a recorder: each one is
 /// free in the apps most people use (not ⇧⌘V, paste and match style, or ⌥⌘V, Finder's move).
+/// Where a letter sits on the keyboard layout in use. Shortcuts are registered by key position,
+/// and "V" is not in the same place on every layout: on Dvorak it is where QWERTY has the period.
+enum KeyLayout {
+    /// The key code that types `letter`, or nil if the layout has no such key. `command` asks
+    /// which key gives it with ⌘ held, which differs on layouts like "Dvorak - QWERTY ⌘".
+    /// `layoutID` picks a layout by id (for tests); nil is the current one, or the Latin one
+    /// beside it when the current layout has no Latin letters.
+    static func code(for letter: Character, command: Bool = false, layoutID: String? = nil) -> Int? {
+        let source: TISInputSource?
+        if let layoutID {
+            let filter = [kTISPropertyInputSourceID as String: layoutID] as CFDictionary
+            source = (TISCreateInputSourceList(filter, true)?.takeRetainedValue() as? [TISInputSource])?.first
+        } else {
+            source = TISCopyCurrentASCIICapableKeyboardLayoutInputSource()?.takeRetainedValue()
+        }
+        guard let source, let raw = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData) else { return nil }
+        let data = Unmanaged<CFData>.fromOpaque(raw).takeUnretainedValue() as Data
+        let want = String(letter).lowercased()
+        return data.withUnsafeBytes { bytes -> Int? in
+            guard let layout = bytes.bindMemory(to: UCKeyboardLayout.self).baseAddress else { return nil }
+            for code in 0..<128 {
+                var dead: UInt32 = 0, length = 0
+                var chars = [UniChar](repeating: 0, count: 4)
+                let status = UCKeyTranslate(layout, UInt16(code), UInt16(kUCKeyActionDown), command ? UInt32(cmdKey >> 8) : 0,
+                                            UInt32(LMGetKbdType()), OptionBits(kUCKeyTranslateNoDeadKeysBit), &dead, chars.count, &length, &chars)
+                if status == noErr, length == 1, String(utf16CodeUnits: chars, count: 1).lowercased() == want { return code }
+            }
+            return nil
+        }
+    }
+
+    /// The V key for shortcuts, and for ⌘V. Falls back to its QWERTY position.
+    static var v: Int { code(for: "v") ?? kVK_ANSI_V }
+    static var pasteV: Int { code(for: "v", command: true) ?? v }
+}
+
 enum ClipboardShortcut: String, CaseIterable, Identifiable {
     case controlOptionV, controlCommandV, controlShiftV, off
 
@@ -144,9 +180,9 @@ enum ClipboardShortcut: String, CaseIterable, Identifiable {
     /// Carbon key code and modifiers, or nil when off.
     var keys: (code: Int, modifiers: Int)? {
         switch self {
-        case .controlOptionV: return (kVK_ANSI_V, controlKey | optionKey)
-        case .controlCommandV: return (kVK_ANSI_V, controlKey | cmdKey)
-        case .controlShiftV: return (kVK_ANSI_V, controlKey | shiftKey)
+        case .controlOptionV: return (KeyLayout.v, controlKey | optionKey)
+        case .controlCommandV: return (KeyLayout.v, controlKey | cmdKey)
+        case .controlShiftV: return (KeyLayout.v, controlKey | shiftKey)
         case .off: return nil
         }
     }
@@ -214,7 +250,7 @@ enum Keystroke {
         }
         let src = CGEventSource(stateID: .combinedSessionState)
         for down in [true, false] {
-            let e = CGEvent(keyboardEventSource: src, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: down)
+            let e = CGEvent(keyboardEventSource: src, virtualKey: CGKeyCode(KeyLayout.pasteV), keyDown: down)
             e?.flags = .maskCommand
             e?.post(tap: .cghidEventTap)
         }

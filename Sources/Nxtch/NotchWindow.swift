@@ -293,6 +293,11 @@ final class NotchController {
             MainActor.assumeIsolated { self?.position() }
         }
         clipboard.requestClose = { [weak self] in self?.setOpen(false) }
+        // A new keyboard layout can move the V key, so the shortcut is registered again.
+        DistributedNotificationCenter.default().addObserver(forName: Notification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String),
+                                                            object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { if let self { self.hotkey?.set(self.settings.clipboardShortcut) } }
+        }
     }
 
     /// Everything that listens for input: clicks elsewhere, Esc, the cursor check and the shortcut.
