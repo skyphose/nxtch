@@ -60,7 +60,7 @@ struct NotchView: View {
                         .padding(.bottom, 10)
                         .transition(.opacity.combined(with: .scale(scale: 0.92, anchor: .top)))
                 } else {
-                    ClosedContent(vm: vm, model: model, shelf: shelf, showEars: earsVisible, showMeter: settings.showMeters, leftEar: leftEar)
+                    ClosedContent(vm: vm, model: model, nowPlaying: nowPlaying, shelf: shelf, showEars: earsVisible, showMeter: settings.showMeters, leftEar: leftEar)
                         .transition(.opacity)
                 }
             }
@@ -96,6 +96,7 @@ struct NotchView: View {
 private struct ClosedContent: View {
     @ObservedObject var vm: NotchViewModel
     @ObservedObject var model: MixerModel
+    @ObservedObject var nowPlaying: NowPlayingMonitor
     @ObservedObject var shelf: ShelfStore
     let showEars: Bool
     let showMeter: Bool
@@ -108,8 +109,16 @@ private struct ClosedContent: View {
                     // Every playing app on the left, the meter's app first. One meter on the right.
                     HStack(spacing: NotchViewModel.earIconGap) {
                         ForEach(model.playingApps.prefix(NotchViewModel.maxEarIcons)) { app in
-                            Image(nsImage: app.icon).resizable().interpolation(.high)
-                                .frame(width: vm.earIcon, height: vm.earIcon)
+                            // The app playing the song shows its cover, when nxtch has one.
+                            if let cover = nowPlaying.artwork, nowPlaying.info?.belongs(to: app.id) == true {
+                                Image(nsImage: cover).resizable().interpolation(.high)
+                                    .frame(width: vm.earIcon, height: vm.earIcon)
+                                    .clipShape(RoundedRectangle(cornerRadius: vm.earIcon * 0.22, style: .continuous))
+                                    .transition(.opacity)
+                            } else {
+                                Image(nsImage: app.icon).resizable().interpolation(.high)
+                                    .frame(width: vm.earIcon, height: vm.earIcon)
+                            }
                         }
                     }
                     .frame(width: leftEar)
