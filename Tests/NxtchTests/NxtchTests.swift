@@ -260,6 +260,8 @@ final class SpotifyArtworkTests: XCTestCase {
         let c = SpotifyArtwork.candidates(for: "https://i.scdn.co/image/ab67616d0000b273e6737d3026a9814286d745f9")
         XCTAssertEqual(c.first, "https://i.scdn.co/image/ab67616d0000b273e6737d3026a9814286d745f9")
         XCTAssertTrue(c.contains("https://i.scdn.co/image/ab67616d00001e02e6737d3026a9814286d745f9"))
+        XCTAssertTrue(c.contains("https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e02e6737d3026a9814286d745f9"))
+        XCTAssertNotNil(SpotifyArtwork.validURL("https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e02e6737d3026a9814286d745f9"))
         XCTAssertEqual(Set(c).count, c.count)
     }
 }

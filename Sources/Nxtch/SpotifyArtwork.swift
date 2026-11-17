@@ -10,17 +10,21 @@ import CryptoKit
 /// downloaded. A cover Spotify hasn't shown yet simply isn't there, and the card shows the app's
 /// icon instead.
 enum SpotifyArtwork {
-    private static let cache = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Library/Caches/com.spotify.client/Default/Cache/Cache_Data")
+    /// Spotify has kept its cache in both of these: Browser/ now, Default/ in older versions.
+    private static let caches = ["Browser", "Default"].map {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Caches/com.spotify.client/\($0)/Cache/Cache_Data")
+    }
+    /// Spotify fetches the same cover from more than one server, and the cache keys on the server.
+    private static let hosts = ["i.scdn.co", "image-cdn-fa.spotifycdn.com", "image-cdn-ak.spotifycdn.com"]
     /// How Spotify's cache names a cover: the page it was shown in, then the image address.
     private static let keyPrefix = "1/0/_dk_https://spotify.com https://spotify.com "
-    /// The same cover at different sizes: 640, 300, an in-between one, then 64 pixels.
-    private static let sizes = ["0000b273", "00001e02", "0000e1a3", "00004851"]
+    /// The same cover at different sizes, roughly largest first. 64 pixels comes last.
+    private static let sizes = ["0000b273", "0000e1a3", "00001e02", "0000aa54", "00004851"]
 
     /// Only Spotify's own image addresses, so a stray string can't point nxtch at another file.
     static func validURL(_ s: String) -> String? {
-        let prefix = "https://i.scdn.co/image/"
-        guard s.hasPrefix(prefix), s.count <= prefix.count + 64 else { return nil }
+        guard let prefix = hosts.map({ "https://\($0)/image/" }).first(where: s.hasPrefix), s.count <= prefix.count + 64 else { return nil }
         let id = s.dropFirst(prefix.count)
         return id.allSatisfy(\.isHexDigit) && id.count >= 16 ? s : nil
     }
@@ -32,12 +36,16 @@ enum SpotifyArtwork {
         return String(format: "%016llx_0", hash)
     }
 
-    /// The same cover at each size Spotify uses, largest first.
+    /// The same cover at each size and from each server Spotify uses, the address it gave first.
     static func candidates(for url: String) -> [String] {
-        let prefix = "https://i.scdn.co/image/ab67616d"
-        guard url.hasPrefix(prefix), url.count >= prefix.count + 8 else { return [url] }
-        let id = url.dropFirst(prefix.count + 8)
-        return [url] + sizes.map { prefix + $0 + id }.filter { $0 != url }
+        guard let slash = url.range(of: "/image/ab67616d"), url.distance(from: slash.upperBound, to: url.endIndex) > 8 else { return [url] }
+        let id = url[url.index(slash.upperBound, offsetBy: 8)...]
+        var out = [url]
+        for size in sizes { for host in hosts {
+            let u = "https://\(host)/image/ab67616d\(size)\(id)"
+            if !out.contains(u) { out.append(u) }
+        } }
+        return out
     }
 
     /// Reads the cover off the main thread. Tries again a moment later, since Spotify may still be
@@ -46,6 +54,7 @@ enum SpotifyArtwork {
         DispatchQueue.global(qos: .utility).async {
             let image = candidates(for: url).lazy.compactMap(read).first
             onMain {
+                Log.audio.info("cover \(image == nil ? "not cached" : "found", privacy: .public) try=\(attempt, privacy: .public)")
                 if image == nil, attempt < 3 {
                     _ = after(Double(attempt + 1)) { load(url, attempt: attempt + 1, done: done) }
                 } else {
@@ -56,8 +65,9 @@ enum SpotifyArtwork {
     }
 
     private static func read(_ url: String) -> NSImage? {
-        let file = cache.appendingPathComponent(cacheFileName(for: url))
-        guard let data = try? Data(contentsOf: file, options: .mappedIfSafe), data.count < 4 << 20,
+        let name = cacheFileName(for: url)
+        guard let data = caches.lazy.compactMap({ try? Data(contentsOf: $0.appendingPathComponent(name), options: .mappedIfSafe) }).first,
+              data.count < 4 << 20,
               data.range(of: Data(url.utf8)) != nil,   // the entry really is this image
               let start = data.range(of: Data([0xFF, 0xD8, 0xFF]))?.lowerBound else { return nil }
         // The JPEG runs from its start marker. What follows it in the file is ignored by the decoder.

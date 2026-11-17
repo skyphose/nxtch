@@ -175,6 +175,7 @@ final class NowPlayingMonitor: ObservableObject {
         artworkFor = url
         artwork = nil
         guard let url else { return }
+        Log.audio.info("cover asked for")
         SpotifyArtwork.load(url) { [weak self] image in
             guard let self, self.artworkFor == url else { return }
             self.artwork = image
