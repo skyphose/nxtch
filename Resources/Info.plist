@@ -15,6 +15,8 @@
     <key>NSHighResolutionCapable</key><true/>
     <!-- Files nxtch writes (shelf drops) get the quarantine flag, so Gatekeeper still checks them. -->
     <key>LSFileQuarantineEnabled</key><true/>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>nxtch asks Spotify which cover goes with the current song, then reads it from Spotify's own cache on this Mac.</string>
     <key>NSAudioCaptureUsageDescription</key>
     <string>nxtch taps each app's audio so it can change that app's volume.</string>
 </dict>

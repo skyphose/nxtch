@@ -16,6 +16,9 @@ struct NowPlayingInfo: Equatable {
     var duration: Double?
     var timestamp: Date?
     var rate: Double
+    /// Spotify's address for the cover. Only the address: the image itself comes from Spotify's
+    /// cache on disk (see `SpotifyArtwork`), never from the network.
+    var artworkURL: String? = nil
 
     func belongs(to appID: String) -> Bool { bundleID == appID || parentBundleID == appID }
 
@@ -46,7 +49,8 @@ extension NowPlayingInfo {
             elapsed: seconds("elapsed"),
             duration: seconds("duration").flatMap { $0 > 0 ? $0 : nil },
             timestamp: (o["timestamp"] as? Double).flatMap { $0.isFinite ? Date(timeIntervalSince1970: $0) : nil },
-            rate: (o["rate"] as? Double).map { $0.isFinite ? min(max($0, -8), 8) : 1 } ?? 1)
+            rate: (o["rate"] as? Double).map { $0.isFinite ? min(max($0, -8), 8) : 1 } ?? 1,
+            artworkURL: (o["artwork"] as? String).flatMap(SpotifyArtwork.validURL))
     }
 }
 
@@ -162,8 +166,24 @@ final class NowPlayingMonitor: ObservableObject {
         }
     }
 
+    /// The cover for `info`, when there is one.
+    @Published private(set) var artwork: NSImage?
+    private var artworkFor: String?
+
+    private func loadArtwork(_ url: String?) {
+        guard url != artworkFor else { return }
+        artworkFor = url
+        artwork = nil
+        guard let url else { return }
+        SpotifyArtwork.load(url) { [weak self] image in
+            guard let self, self.artworkFor == url else { return }
+            self.artwork = image
+        }
+    }
+
     private func handle(_ o: [String: Any]) {
         let new = NowPlayingInfo(json: o)
+        loadArtwork(new?.artworkURL)
         let ownerMoved = new?.bundleID != reported?.bundleID || new?.parentBundleID != reported?.parentBundleID
         reported = new
         info = new
@@ -194,7 +214,7 @@ final class NowPlayingMonitor: ObservableObject {
       ObjC.bindFunction('MRMediaRemoteRegisterForNowPlayingNotifications', ['void', ['id']]);
       const R = $.NSClassFromString('MRNowPlayingRequest');
       const str = (d, k) => { const v = d.objectForKey(k); return v.isNil() ? null : ObjC.unwrap(v); };
-      let last = '', due = 0, safety = 0;
+      let last = '', due = 0, safety = 0, artKey = '', artURL = null;
       $.NSNotificationCenter.defaultCenter.addObserverForNameObjectQueueUsingBlock($(), $(), $.NSOperationQueue.mainQueue, n => {
         const name = ObjC.unwrap(n.name);
         if (!due && (name.indexOf('MRMediaRemote') >= 0 || name.indexOf('NowPlaying') >= 0)) due = Date.now() + 200;
@@ -221,6 +241,16 @@ final class NowPlayingMonitor: ObservableObject {
           if (c && !c.isNil()) {
             out.bundle = ObjC.unwrap(c.bundleIdentifier);
             out.parent = ObjC.unwrap(c.parentApplicationBundleIdentifier);
+          }
+          // Spotify knows which cover goes with the song. Asked once per song, and only while
+          // Spotify is already running: asking never launches it.
+          if (out.bundle === 'com.spotify.client' && out.title) {
+            const key = out.title + '\u0000' + (out.artist || '');
+            if (key !== artKey) {
+              artKey = key; artURL = null;
+              try { const sp = Application('Spotify'); if (sp.running()) artURL = sp.currentTrack.artworkUrl(); } catch (e) {}
+            }
+            if (artURL) out.artwork = artURL;
           }
         } catch (e) { out.error = String(e); }
         const j = JSON.stringify(out);

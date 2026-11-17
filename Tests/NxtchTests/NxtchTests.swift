@@ -242,6 +242,28 @@ final class MeterColorTests: XCTestCase {
     }
 }
 
+final class SpotifyArtworkTests: XCTestCase {
+    func testCacheFileNameMatchesSpotifysCache() {
+        // Read off a real entry in Spotify's cache: this address is stored in 24e320522fbe70c6_0.
+        XCTAssertEqual(SpotifyArtwork.cacheFileName(for: "https://i.scdn.co/image/ab67616d0000b273e6737d3026a9814286d745f9"),
+                       "24e320522fbe70c6_0")
+    }
+
+    func testOnlySpotifyImageAddressesAreAccepted() {
+        XCTAssertNotNil(SpotifyArtwork.validURL("https://i.scdn.co/image/ab67616d0000b273e6737d3026a9814286d745f9"))
+        XCTAssertNil(SpotifyArtwork.validURL("https://example.com/image/ab67616d0000b273"))
+        XCTAssertNil(SpotifyArtwork.validURL("https://i.scdn.co/image/../../etc/passwd"))
+        XCTAssertNil(SpotifyArtwork.validURL("file:///etc/passwd"))
+    }
+
+    func testOtherSizesOfTheSameCover() {
+        let c = SpotifyArtwork.candidates(for: "https://i.scdn.co/image/ab67616d0000b273e6737d3026a9814286d745f9")
+        XCTAssertEqual(c.first, "https://i.scdn.co/image/ab67616d0000b273e6737d3026a9814286d745f9")
+        XCTAssertTrue(c.contains("https://i.scdn.co/image/ab67616d00001e02e6737d3026a9814286d745f9"))
+        XCTAssertEqual(Set(c).count, c.count)
+    }
+}
+
 final class KeyLayoutTests: XCTestCase {
     func testVFollowsTheKeyboardLayout() {
         // QWERTY: V is key 9. Dvorak: V is where QWERTY has the period, key 47.

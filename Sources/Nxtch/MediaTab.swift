@@ -55,7 +55,17 @@ private struct NowPlayingCard: View {
     var body: some View {
         HStack(spacing: 12) {
             Group {
-                if let app {
+                if let cover = monitor.artwork {
+                    // The cover, with the app's icon tucked in its corner.
+                    Image(nsImage: cover).resizable().interpolation(.high)
+                        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        .overlay(alignment: .bottomTrailing) {
+                            if let app {
+                                Image(nsImage: app.icon).resizable().interpolation(.high)
+                                    .frame(width: 18, height: 18).offset(x: 4, y: 4)
+                            }
+                        }
+                } else if let app {
                     Image(nsImage: app.icon).resizable().interpolation(.high)
                 } else {
                     Image(systemName: "music.note").font(.system(size: 24)).foregroundStyle(.secondary)
