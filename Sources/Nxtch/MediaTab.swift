@@ -36,7 +36,8 @@ struct MediaTab: View {
                     VStack(spacing: 0) {
                         ForEach(model.apps) { app in
                             AppRow(app: app, model: model, showMeter: meters,
-                                   media: nowPlaying.info.flatMap { $0.belongs(to: app.id) ? $0 : nil })
+                                   media: nowPlaying.info.flatMap { $0.belongs(to: app.id) ? $0 : nil },
+                                   cover: nowPlaying.info?.belongs(to: app.id) == true ? nowPlaying.artwork : nil)
                         }
                     }
                 }
@@ -162,6 +163,7 @@ private struct AppRow: View {
     @ObservedObject var model: MixerModel
     let showMeter: Bool
     let media: NowPlayingInfo?
+    let cover: NSImage?
 
     /// The slider sticks to 100% as it passes. Holding ⇧ turns that off, so any value can be set.
     private func adjust(to value: Double) {
@@ -173,9 +175,21 @@ private struct AppRow: View {
         let volume = model.volume(app.id)
         let boosted = volume > 1.001 && !muted
         HStack(spacing: 10) {
-            Image(nsImage: app.icon).resizable().interpolation(.high)
-                .frame(width: 26, height: 26)
-                .opacity(muted ? 0.45 : 1)
+            Group {
+                if let cover {
+                    // The song's cover, the app's icon tucked in its corner, as on the card above.
+                    Image(nsImage: cover).resizable().interpolation(.high)
+                        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                        .overlay(alignment: .bottomTrailing) {
+                            Image(nsImage: app.icon).resizable().interpolation(.high)
+                                .frame(width: 12, height: 12).offset(x: 3, y: 3)
+                        }
+                } else {
+                    Image(nsImage: app.icon).resizable().interpolation(.high)
+                }
+            }
+            .frame(width: 26, height: 26)
+            .opacity(muted ? 0.45 : 1)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 5) {
                     Text(app.name).font(.system(size: 12, weight: .medium)).lineLimit(1).layoutPriority(1)

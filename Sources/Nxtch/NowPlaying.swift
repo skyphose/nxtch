@@ -215,7 +215,7 @@ final class NowPlayingMonitor: ObservableObject {
       ObjC.bindFunction('MRMediaRemoteRegisterForNowPlayingNotifications', ['void', ['id']]);
       const R = $.NSClassFromString('MRNowPlayingRequest');
       const str = (d, k) => { const v = d.objectForKey(k); return v.isNil() ? null : ObjC.unwrap(v); };
-      let last = '', due = 0, safety = 0, artKey = '', artURL = null;
+      let last = '', due = 0, safety = 0, artKey = '', artURL = null, artTries = 0;
       $.NSNotificationCenter.defaultCenter.addObserverForNameObjectQueueUsingBlock($(), $(), $.NSOperationQueue.mainQueue, n => {
         const name = ObjC.unwrap(n.name);
         if (!due && (name.indexOf('MRMediaRemote') >= 0 || name.indexOf('NowPlaying') >= 0)) due = Date.now() + 200;
@@ -249,7 +249,16 @@ final class NowPlayingMonitor: ObservableObject {
             const key = out.title + '\u0000' + (out.artist || '');
             if (key !== artKey) {
               artKey = key; artURL = null;
-              try { const sp = Application('Spotify'); if (sp.running()) artURL = sp.currentTrack.artworkUrl(); } catch (e) {}
+              // Spotify can still be on the last song for a moment: then ask again next time.
+              try {
+                const sp = Application('Spotify');
+                if (sp.running()) {
+                  const t = sp.currentTrack;
+                  const same = t.name() === out.title;
+                  if (same || ++artTries > 5) { artURL = same ? t.artworkUrl() : null; artTries = 0; }
+                  else { artKey = ''; due = Date.now() + 500; }
+                }
+              } catch (e) {}
             }
             if (artURL) out.artwork = artURL;
           }
