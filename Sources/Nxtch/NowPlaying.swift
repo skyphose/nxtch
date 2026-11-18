@@ -275,8 +275,8 @@ final class NowPlayingMonitor: ObservableObject {
             newSongs[b] = song
             takeCover(e, song, previous: songs[b], into: &newCovers)
         }
-        for b in newCovers.keys where newSongs[b] == nil { newCovers[b] = nil }
         if pick != nil, let b = pick?.bundleID, newSongs[b] == nil { newSongs[b] = pick }
+        for b in newCovers.keys where newSongs[b] == nil { newCovers[b] = nil }
         if newSongs != songs { songs = newSongs }
         if newCovers.mapValues(\.id) != covers.mapValues(\.id) { covers = newCovers }
         macOSPick = pick?.bundleID

@@ -57,6 +57,22 @@ static id str(NSDictionary *info, NSString *key) {
     return [v isKindOfClass:NSString.class] || [v isKindOfClass:NSNumber.class] ? v : nil;
 }
 
+/// Covers only from media players. Browsers send a video's thumbnail now and then: Firefox for
+/// about 2 s after a video starts, then takes it back. So a browser's song comes without a cover,
+/// and its cover is never asked for.
+static BOOL isBrowser(NSString *bundle, NSString *parentID) {
+    static NSArray *prefixes;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        prefixes = @[ @"org.mozilla.", @"com.google.Chrome", @"org.chromium.", @"com.apple.Safari", @"com.apple.WebKit",
+                      @"com.microsoft.edgemac", @"company.thebrowser.", @"com.brave.Browser", @"com.operasoftware.",
+                      @"com.vivaldi.", @"app.zen-browser.", @"com.kagi.kagimacOS", @"net.imput.helium", @"ai.perplexity.comet" ];
+    });
+    for (NSString *p in prefixes)
+        if ([bundle hasPrefix:p] || [parentID hasPrefix:p]) return YES;
+    return NO;
+}
+
 static id call(id obj, NSString *sel) {
     SEL s = NSSelectorFromString(sel);
     return [obj respondsToSelector:s] ? ((id (*)(id, SEL))objc_msgSend)(obj, s) : nil;
@@ -135,6 +151,11 @@ static void readApps(void (^done)(NSArray *)) {
                 if (finished) return;
                 if (!e[@"title"]) { if (--pending == 0) finish(); return; }
                 [apps addObject:e];   // the song now; its cover joins it below if it's quick
+                if (isBrowser(bundle, [parentID isKindOfClass:NSString.class] ? parentID : nil)) {
+                    e[@"browser"] = @YES;
+                    if (--pending == 0) finish();
+                    return;
+                }
                 if ([known[0] isEqualToString:songKey] && sentArt[bundle]) {
                     e[@"artID"] = known[1];   // same song, cover already with nxtch
                     if (--pending == 0) finish();
@@ -179,7 +200,7 @@ static void readAll(void) {
                     // song still has none (Firefox never sends one: it costs these four reads).
                     NSMutableArray *missing = [NSMutableArray array];
                     for (NSDictionary *e in apps)
-                        if ([e[@"playing"] boolValue] && !e[@"artID"]) [missing addObject:[NSString stringWithFormat:@"%@ %@", e[@"bundle"], e[@"title"]]];
+                        if ([e[@"playing"] boolValue] && !e[@"artID"] && !e[@"browser"]) [missing addObject:[NSString stringWithFormat:@"%@ %@", e[@"bundle"], e[@"title"]]];
                     NSString *songs = [missing componentsJoinedByString:@"\n"];
                     if (![songs isEqualToString:artFor]) { artFor = songs; artTries = 0; }
                     if (missing.count && artTries < 4) {

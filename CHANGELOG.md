@@ -6,9 +6,9 @@ newest first. every version is a git tag, so `git checkout v0.3.0` gets you that
 
 covers, from any app that sends one, and a meter that matches them.
 
-- the song's cover shows beside the closed notch, on the now-playing card and in the mixer, in place of the app's icon. it fades in when the song changes. spotify, chrome, safari and quicktime send one. firefox doesnt, so it keeps its icon.
+- the song's cover shows beside the closed notch, on the now-playing card and in the mixer, in place of the app's icon. it fades in when the song changes. covers come from media players only (spotify, music, quicktime and the like). browsers keep their icon: firefox sends a video's thumbnail for about 2 seconds and then takes it back.
 - the meter takes the cover's color while there is one.
-- two apps playing at once each keep their own song and cover. macOS only follows one, so a firefox video used to wipe spotify's. the card shows the one playing music with a cover. its buttons go wherever macOS sends them, so they rest while that's the other app.
+- two apps playing at once each keep their own song and cover. macOS only follows one, so a firefox video used to wipe spotify's. the other app's song changes show within 1.5 s. the card shows the one playing music with a cover. its buttons go wherever macOS sends them, so they rest while that's the other app.
 - what's playing now comes from a small library of nxtch's that apple's `/usr/bin/perl` loads, the idea from [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter). measured on my mac: 0.07% cpu and 25 MB, against 0.17% and 30 MB for the `osascript` helper it replaces. it quits within 10 s if nxtch goes away. if perl ever stops working, the `osascript` helper takes over, without covers.
 - volume tops out at 125%, down from 150%. a peak limiter replaced the soft clipper: it turns down only for a moment when a peak would clip, so the boost goes into the quieter parts. 150% on music that was already loud mostly squashed it.
 - clipboard history in the gear menu is a list: off, or keep things 1 hour, 1 day, 1 week, 2 weeks or 1 month. a week is the default, as before. a shorter time drops the older items right away.
