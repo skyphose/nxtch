@@ -38,8 +38,8 @@ struct MediaTab: View {
                     VStack(spacing: 0) {
                         ForEach(model.apps) { app in
                             AppRow(app: app, model: model, showMeter: meters,
-                                   media: nowPlaying.info.flatMap { $0.belongs(to: app.id) ? $0 : nil },
-                                   cover: nowPlaying.info?.belongs(to: app.id) == true ? nowPlaying.artwork : nil,
+                                   media: nowPlaying.song(for: app.id),
+                                   cover: nowPlaying.cover(for: app.id),
                                    meterColors: nowPlaying.meterColors(for: app))
                         }
                     }
@@ -103,6 +103,11 @@ private struct NowPlayingCard: View {
                 control(info.isPlaying ? "pause.fill" : "play.fill", .playPause, size: 19)
                 control("forward.fill", .next, size: 13)
             }
+            // macOS sends these to the one app it picked. When the card shows another (Spotify
+            // while a Firefox video holds macOS's pick), they'd reach the wrong app: so they rest.
+            .disabled(!monitor.controlsReachCard)
+            .opacity(monitor.controlsReachCard ? 1 : 0.3)
+            .help(monitor.controlsReachCard ? "" : "macOS sends play and skip to the app that last started playing")
         }
         .foregroundStyle(.white)
     }

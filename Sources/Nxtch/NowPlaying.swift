@@ -112,7 +112,7 @@ final class NowPlayingMonitor: ObservableObject {
         process?.terminate()
         process = nil
         buffer.removeAll(); scanned = 0
-        artwork = nil; artworkID = nil
+        songs = [:]; covers = [:]; macOSPick = nil
         if reported != nil || info != nil {
             reported = nil
             info = nil
@@ -203,18 +203,33 @@ final class NowPlayingMonitor: ObservableObject {
         scanned = buffer.count
     }
 
-    /// The cover for `info`, when there is one.
-    @Published private(set) var artwork: NSImage? {
-        didSet { if artwork !== oldValue { artworkTint = artwork?.vividColor } }
-    }
-    /// The cover's most vivid color: the playing app's meter takes it in place of the icon's.
-    private(set) var artworkTint: NSColor?
-    private var artworkID: String?
+    /// Every app's own song, by bundle id. macOS keeps one "now playing" app, but it has an entry
+    /// for each: Firefox starting a video takes macOS's pick from Spotify, not Spotify's song.
+    @Published private(set) var songs: [String: NowPlayingInfo] = [:]
+    /// Each app's cover, by bundle id, with its most vivid color for the meter.
+    @Published private(set) var covers: [String: Cover] = [:]
+    struct Cover { let id: String; let image: NSImage; let tint: NSColor }
+    /// The app macOS itself picked. Playback buttons reach only that one.
+    private(set) var macOSPick: String?
 
-    /// The color of `app`'s meter: the cover's while it plays a song with one, else the icon's.
+    /// The card's buttons reach the card's app: it's the one macOS picked.
+    var controlsReachCard: Bool { info == nil || info?.bundleID == macOSPick }
+
+    func song(for appID: String) -> NowPlayingInfo? {
+        songs[appID] ?? songs.values.first { $0.belongs(to: appID) }
+    }
+
+    func cover(for appID: String) -> NSImage? { song(for: appID)?.bundleID.flatMap { covers[$0]?.image } }
+
+    /// The card's cover.
+    var artwork: NSImage? { info?.bundleID.flatMap { covers[$0]?.image } }
+
+    /// Changes whenever any cover does, for animations.
+    var coverIDs: [String] { covers.values.map(\.id).sorted() }
+
+    /// The color of `app`'s meter: its cover's while it has a song with one, else its icon's.
     func tint(for app: AppEntry) -> NSColor {
-        if let artworkTint, info?.belongs(to: app.id) == true { return artworkTint }
-        return app.tint
+        song(for: app.id)?.bundleID.flatMap { covers[$0]?.tint } ?? app.tint
     }
 
     /// `app`'s own meter fade, from its color to a lighter shade of it.
@@ -223,27 +238,52 @@ final class NowPlayingMonitor: ObservableObject {
         return [t, t.blended(withFraction: 0.5, of: .white) ?? t]
     }
 
-    /// Takes the cover from the helper's line. macOS sometimes drops the cover for a moment in the
+    /// The song the card shows: one that's playing, then one with a length and a cover (music, not
+    /// a browser video), then macOS's own pick.
+    nonisolated static func cardSong(_ all: [NowPlayingInfo], pick: String?, hasCover: (String) -> Bool) -> NowPlayingInfo? {
+        func score(_ s: NowPlayingInfo) -> Int {
+            let b = s.bundleID ?? ""
+            return (s.isPlaying ? 4 : 0) + (s.duration != nil && hasCover(b) ? 2 : 0) + (b == pick ? 1 : 0)
+        }
+        return all.max { (score($0), $1.bundleID ?? "") < (score($1), $0.bundleID ?? "") }
+    }
+
+    /// Takes an app's cover from its entry. macOS sometimes drops a cover for a moment in the
     /// middle of a song: then the one already showing stays, as long as the song is the same.
-    private func takeArtwork(_ o: [String: Any], _ new: NowPlayingInfo?) {
-        if let b64 = o["art"] as? String, let id = new?.artID, b64.count < 12 << 20,
+    private func takeCover(_ e: [String: Any], _ s: NowPlayingInfo, previous: NowPlayingInfo?, into covers: inout [String: Cover]) {
+        guard let b = s.bundleID else { return }
+        if let b64 = e["art"] as? String, let id = s.artID, b64.count < 12 << 20,
            let data = Data(base64Encoded: b64), let image = NSImage(data: data) {
-            artworkID = id
-            artwork = image
-            Log.audio.info("cover in: \(data.count, privacy: .public) bytes")
-        } else if let id = new?.artID {
-            if id != artworkID { artwork = nil; artworkID = nil }   // not seen yet: the next line brings it
-        } else if new?.title != reported?.title || new?.artist != reported?.artist || new?.bundleID != reported?.bundleID {
-            artwork = nil; artworkID = nil
+            covers[b] = Cover(id: id, image: image, tint: image.vividColor)
+            Log.audio.info("cover in: \(b, privacy: .public) \(data.count, privacy: .public) bytes")
+        } else if let id = s.artID {
+            if covers[b]?.id != id { covers[b] = nil }   // not seen yet: a later line brings it
+        } else if s.title != previous?.title || s.artist != previous?.artist {
+            covers[b] = nil
         }
     }
 
     private func handle(_ o: [String: Any]) {
-        let new = NowPlayingInfo(json: o)
-        takeArtwork(o, new)
-        let ownerMoved = new?.bundleID != reported?.bundleID || new?.parentBundleID != reported?.parentBundleID
-        reported = new
-        info = new
+        var pick = NowPlayingInfo(json: o)
+        // The osascript helper has no list: its one song is the only one.
+        let entries = (o["apps"] as? [[String: Any]]) ?? [o]
+        var newSongs: [String: NowPlayingInfo] = [:]
+        var newCovers = covers
+        for e in entries {
+            guard var song = NowPlayingInfo(json: e), let b = song.bundleID else { continue }
+            if b == pick?.bundleID, let p = pick { song.isPlaying = p.isPlaying }   // macOS's own answer is surer
+            newSongs[b] = song
+            takeCover(e, song, previous: songs[b], into: &newCovers)
+        }
+        for b in newCovers.keys where newSongs[b] == nil { newCovers[b] = nil }
+        if pick != nil, let b = pick?.bundleID, newSongs[b] == nil { newSongs[b] = pick }
+        if newSongs != songs { songs = newSongs }
+        if newCovers.mapValues(\.id) != covers.mapValues(\.id) { covers = newCovers }
+        macOSPick = pick?.bundleID
+        pick = Self.cardSong(Array(newSongs.values), pick: macOSPick) { newCovers[$0] != nil }
+        let ownerMoved = pick?.bundleID != reported?.bundleID || pick?.parentBundleID != reported?.parentBundleID
+        reported = pick
+        info = pick
         if ownerMoved { ownerChanged?() }
     }
 

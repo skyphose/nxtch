@@ -301,3 +301,28 @@ final class LayoutTests: XCTestCase {
         XCTAssertLessThanOrEqual(row + 8 + 110, NotchViewModel.minOpenWidth - 2 * NotchViewModel.contentInset)
     }
 }
+
+final class CardSongTests: XCTestCase {
+    private func song(_ bundle: String, playing: Bool = true, duration: Double? = 200) -> NowPlayingInfo {
+        NowPlayingInfo(title: bundle, artist: nil, album: nil, bundleID: bundle, parentBundleID: nil, isPlaying: playing,
+                       elapsed: 0, duration: duration, timestamp: nil, rate: 1)
+    }
+
+    func testMusicWithACoverBeatsABrowserVideo() {
+        let spotify = song("com.spotify.client"), firefox = song("org.mozilla.firefox", duration: nil)
+        let card = NowPlayingMonitor.cardSong([firefox, spotify], pick: "org.mozilla.firefox") { $0 == "com.spotify.client" }
+        XCTAssertEqual(card?.bundleID, "com.spotify.client")
+    }
+
+    func testPlayingBeatsPaused() {
+        let paused = song("com.spotify.client", playing: false), playing = song("com.google.Chrome", duration: nil)
+        let card = NowPlayingMonitor.cardSong([paused, playing], pick: "com.spotify.client") { _ in true }
+        XCTAssertEqual(card?.bundleID, "com.google.Chrome")
+    }
+
+    func testMacOSPickBreaksATie() {
+        let a = song("com.apple.Music"), b = song("com.spotify.client")
+        XCTAssertEqual(NowPlayingMonitor.cardSong([a, b], pick: "com.apple.Music") { _ in true }?.bundleID, "com.apple.Music")
+        XCTAssertEqual(NowPlayingMonitor.cardSong([a, b], pick: "com.spotify.client") { _ in true }?.bundleID, "com.spotify.client")
+    }
+}

@@ -110,7 +110,7 @@ private struct ClosedContent: View {
                     HStack(spacing: NotchViewModel.earIconGap) {
                         ForEach(model.playingApps.prefix(NotchViewModel.maxEarIcons)) { app in
                             // The app playing the song shows its cover, when nxtch has one.
-                            if let cover = nowPlaying.artwork, nowPlaying.info?.belongs(to: app.id) == true {
+                            if let cover = nowPlaying.cover(for: app.id) {
                                 Image(nsImage: cover).resizable().interpolation(.high)
                                     .frame(width: vm.earIcon, height: vm.earIcon)
                                     .clipShape(RoundedRectangle(cornerRadius: vm.earIcon * 0.22, style: .continuous))
@@ -122,7 +122,7 @@ private struct ClosedContent: View {
                         }
                     }
                     .frame(width: leftEar)
-                    .animation(.fade, value: nowPlaying.artwork)   // a new song's cover fades in
+                    .animation(.fade, value: nowPlaying.coverIDs)   // a new song's cover fades in
                     Spacer(minLength: vm.geometry.notchSize.width)
                     if showMeter {
                         LevelMeter(state: model.mixMeter, colors: model.playingColors(nowPlaying))
