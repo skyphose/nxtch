@@ -39,7 +39,8 @@ struct MediaTab: View {
                         ForEach(model.apps) { app in
                             AppRow(app: app, model: model, showMeter: meters,
                                    media: nowPlaying.info.flatMap { $0.belongs(to: app.id) ? $0 : nil },
-                                   cover: nowPlaying.info?.belongs(to: app.id) == true ? nowPlaying.artwork : nil)
+                                   cover: nowPlaying.info?.belongs(to: app.id) == true ? nowPlaying.artwork : nil,
+                                   meterColors: nowPlaying.meterColors(for: app))
                         }
                     }
                     .background(ScrollViewFinder(tracker: scroll))
@@ -85,7 +86,7 @@ private struct NowPlayingCard: View {
                 HStack(spacing: 6) {
                     Text(info.title).font(.system(size: 13, weight: .semibold)).lineLimit(1)
                     if showMeter {
-                        LevelMeter(state: info.isPlaying ? meter : nil, colors: app?.meterColors ?? [.white])
+                        LevelMeter(state: info.isPlaying ? meter : nil, colors: app.map(monitor.meterColors(for:)) ?? [.white])
                             .frame(width: 12, height: 10)
                     }
                 }
@@ -170,6 +171,7 @@ private struct AppRow: View {
     let showMeter: Bool
     let media: NowPlayingInfo?
     let cover: NSImage?
+    let meterColors: [NSColor]
 
     /// The slider sticks to 100% as it passes. Holding ⇧ turns that off, so any value can be set.
     private func adjust(to value: Double) {
@@ -206,7 +208,7 @@ private struct AppRow: View {
                     }
                     Spacer(minLength: 4)
                     if app.isPlaying, showMeter {
-                        LevelMeter(state: muted ? nil : model.meter(app.id), colors: app.meterColors)
+                        LevelMeter(state: muted ? nil : model.meter(app.id), colors: meterColors)
                             .frame(width: 12, height: 9)
                     }
                 }

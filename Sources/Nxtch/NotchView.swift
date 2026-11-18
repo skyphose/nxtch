@@ -125,7 +125,7 @@ private struct ClosedContent: View {
                     .animation(.fade, value: nowPlaying.artwork)   // a new song's cover fades in
                     Spacer(minLength: vm.geometry.notchSize.width)
                     if showMeter {
-                        LevelMeter(state: model.mixMeter, colors: model.playingColors)
+                        LevelMeter(state: model.mixMeter, colors: model.playingColors(nowPlaying))
                             .frame(width: (vm.earIcon * 0.89).rounded(), height: (vm.earIcon * 0.78).rounded())
                             .frame(width: vm.earWidth)
                     }

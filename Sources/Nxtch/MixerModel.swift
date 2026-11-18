@@ -140,10 +140,10 @@ final class MixerModel: ObservableObject {
     }
 
     /// The closed notch's meter: a fade through the colors of every app shown beside it, or one
-    /// app's own fade when only one is playing.
-    var playingColors: [NSColor] {
+    /// app's own fade when only one is playing. The song's cover color stands in for its app's.
+    func playingColors(_ nowPlaying: NowPlayingMonitor) -> [NSColor] {
         let shown = playingApps.prefix(NotchViewModel.maxEarIcons)
-        return shown.count == 1 ? shown[shown.startIndex].meterColors : shown.map(\.tint)
+        return shown.count == 1 ? nowPlaying.meterColors(for: shown[shown.startIndex]) : shown.map(nowPlaying.tint(for:))
     }
 
     /// The playing apps for the closed notch: the one that owns the meter first.

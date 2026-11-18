@@ -198,8 +198,24 @@ final class NowPlayingMonitor: ObservableObject {
     }
 
     /// The cover for `info`, when there is one.
-    @Published private(set) var artwork: NSImage?
+    @Published private(set) var artwork: NSImage? {
+        didSet { if artwork !== oldValue { artworkTint = artwork?.vividColor } }
+    }
+    /// The cover's most vivid color: the playing app's meter takes it in place of the icon's.
+    private(set) var artworkTint: NSColor?
     private var artworkID: String?
+
+    /// The color of `app`'s meter: the cover's while it plays a song with one, else the icon's.
+    func tint(for app: AppEntry) -> NSColor {
+        if let artworkTint, info?.belongs(to: app.id) == true { return artworkTint }
+        return app.tint
+    }
+
+    /// `app`'s own meter fade, from its color to a lighter shade of it.
+    func meterColors(for app: AppEntry) -> [NSColor] {
+        let t = tint(for: app)
+        return [t, t.blended(withFraction: 0.5, of: .white) ?? t]
+    }
 
     /// Takes the cover from the helper's line. macOS sometimes drops the cover for a moment in the
     /// middle of a song: then the one already showing stays, as long as the song is the same.
