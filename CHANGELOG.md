@@ -2,9 +2,9 @@
 
 newest first. every version is a git tag, so `git checkout v0.3.0` gets you that build.
 
-## unreleased
+## 0.6.6 - 2026-11-18
 
-covers, from any app that sends one, and a meter that matches them.
+covers from your media players, and a meter that matches them.
 
 - the song's cover shows beside the closed notch, on the now-playing card and in the mixer, in place of the app's icon. it fades in when the song changes. covers come from media players only (spotify, music, quicktime and the like). browsers keep their icon: firefox sends a video's thumbnail for about 2 seconds and then takes it back.
 - the meter takes the cover's color while there is one.
