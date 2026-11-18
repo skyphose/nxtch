@@ -48,15 +48,21 @@ enum SpotifyArtwork {
         return out
     }
 
-    /// Reads the cover off the main thread. Tries again a moment later, since Spotify may still be
-    /// fetching the cover when the song changes.
-    static func load(_ url: String, attempt: Int = 0, done: @escaping @MainActor (NSImage?) -> Void) {
+    /// Seconds between looks. Spotify can take over a minute to write a new song's cover to its
+    /// cache (measured: one first showed up after about 70 s), so nxtch keeps looking for ~90 s.
+    /// Each look is 15 file names checked: next to nothing.
+    private static let retryDelays: [Double] = [1, 2, 3, 5, 10, 10, 15, 20, 25]
+
+    /// Reads the cover off the main thread, and looks again while `wanted` says the song is still on.
+    static func load(_ url: String, attempt: Int = 0, wanted: @escaping @MainActor () -> Bool,
+                     done: @escaping @MainActor (NSImage?) -> Void) {
         DispatchQueue.global(qos: .utility).async {
             let image = candidates(for: url).lazy.compactMap(read).first
             onMain {
+                guard wanted() else { return }
                 Log.audio.info("cover \(image == nil ? "not cached" : "found", privacy: .public) try=\(attempt, privacy: .public)")
-                if image == nil, attempt < 3 {
-                    _ = after(Double(attempt + 1)) { load(url, attempt: attempt + 1, done: done) }
+                if image == nil, attempt < retryDelays.count {
+                    _ = after(retryDelays[attempt]) { load(url, attempt: attempt + 1, wanted: wanted, done: done) }
                 } else {
                     done(image)
                 }
