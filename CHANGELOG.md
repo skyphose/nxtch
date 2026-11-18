@@ -2,6 +2,20 @@
 
 newest first. every version is a git tag, so `git checkout v0.3.0` gets you that build.
 
+## unreleased
+
+covers, from any app that sends one, and a meter that matches them.
+
+- the song's cover shows beside the closed notch, on the now-playing card and in the mixer, in place of the app's icon. it fades in when the song changes. spotify, chrome, safari and quicktime send one. firefox doesnt, so it keeps its icon.
+- the meter takes the cover's color while there is one.
+- what's playing now comes from a small library of nxtch's that apple's `/usr/bin/perl` loads, the idea from [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter). measured on my mac: 0.07% cpu and 25 MB, against 0.17% and 30 MB for the `osascript` helper it replaces. it quits within 10 s if nxtch goes away. if perl ever stops working, the `osascript` helper takes over, without covers.
+- volume tops out at 125%, down from 150%. a peak limiter replaced the soft clipper: it turns down only for a moment when a peak would clip, so the boost goes into the quieter parts. 150% on music that was already loud mostly squashed it.
+- clipboard history in the gear menu is a list: off, or keep things 1 hour, 1 day, 1 week, 2 weeks or 1 month. a week is the default, as before. a shorter time drops the older items right away.
+- a thin scroll bar on the clipboard and the mixer when the list doesnt fit. it stays visible and you can drag it.
+- the clipboard shortcut and ⌘V follow your keyboard layout, so V on dvorak is the dvorak V.
+- with reduce motion on, presses, the shelf's delete zone and the opening notch no longer grow, shrink or bounce. before, only the clipboard rows listened.
+- for measuring: `-debugLevels YES` also logs how far behind a volume tap plays, and `-tapBufferFrames N` tries another buffer size.
+
 ## 0.6.5 - 2026-11-14
 
 esc from anywhere, and a smaller clipboard.
