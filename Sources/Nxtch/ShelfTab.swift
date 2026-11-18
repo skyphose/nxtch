@@ -34,7 +34,7 @@ struct ShelfTab: View {
                 }
                 if shelf.isDragging {
                     DeleteZone(shelf: shelf)
-                        .transition(.scale(scale: 0.6).combined(with: .opacity))
+                        .transition(.scale(scale: Motion.scale(0.6)).combined(with: .opacity))
                 }
             }
             .animation(.notch, value: shelf.isDragging)
@@ -63,7 +63,7 @@ private struct DeleteZone: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(Color.red.opacity(hot ? 0 : 0.6), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
         )
-        .scaleEffect(hot ? 1.05 : 1)
+        .scaleEffect(Motion.scale(hot ? 1.05 : 1))
         .animation(.control, value: hot)
         .padding(.vertical, 8)
         .onDrop(of: [.fileURL], isTargeted: $shelf.deleteTargeted) { _ in

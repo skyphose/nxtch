@@ -35,7 +35,7 @@ final class MixerModel: ObservableObject {
     @Published private var volumes: [String: Float]
     @Published private var muted: Set<String>
 
-    nonisolated static let maxVolume: Float = 1.5
+    nonisolated static let maxVolume: Float = 1.25
 
     /// A slider position as a level: kept inside 0...maxVolume, and pulled to exactly 100% when
     /// within 2% of it, so it's easy to get back to untouched, zero-latency audio.

@@ -5,6 +5,8 @@ struct MediaTab: View {
     @ObservedObject var model: MixerModel
     @ObservedObject var nowPlaying: NowPlayingMonitor
     let meters: Bool
+    /// For the scroll bar. Held, not observed, so scrolling only redraws the bar.
+    @State private var scroll = ScrollTracker()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -40,7 +42,10 @@ struct MediaTab: View {
                                    cover: nowPlaying.info?.belongs(to: app.id) == true ? nowPlaying.artwork : nil)
                         }
                     }
+                    .background(ScrollViewFinder(tracker: scroll))
                 }
+                // In the panel's margin, clear of the mute buttons.
+                .overlay { ThinScrollBar(tracker: scroll).offset(x: 7) }
             }
         }
     }
@@ -73,6 +78,7 @@ private struct NowPlayingCard: View {
                 }
             }
             .frame(width: 52, height: 52)
+            .animation(.fade, value: monitor.artwork)   // a new song's cover fades in
             .contentShape(Rectangle())
             .onTapGesture { openSourceApp() }
             VStack(alignment: .leading, spacing: 3) {
@@ -121,7 +127,7 @@ private struct NowPlayingCard: View {
 struct PressableButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.85 : 1)
+            .scaleEffect(Motion.scale(configuration.isPressed ? 0.85 : 1))
             .opacity(configuration.isPressed ? 0.6 : 1)
             .animation(.control, value: configuration.isPressed)
     }
@@ -189,6 +195,7 @@ private struct AppRow: View {
                 }
             }
             .frame(width: 26, height: 26)
+            .animation(.fade, value: cover)
             .opacity(muted ? 0.45 : 1)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 5) {

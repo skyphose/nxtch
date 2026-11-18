@@ -146,6 +146,9 @@ final class TapState: @unchecked Sendable {
     var current: Float
     var lp: (Float, Float, Float) = (0, 0, 0)
     var coeff: (Float, Float, Float) = (0.02, 0.08, 0.3)
+    /// The limiter's own gain, 1 when idle, and how fast it climbs back to 1 per sample.
+    var limit: Float = 1
+    var release: Float = 0.0001
 
     // Main thread only.
     private var display = [Float](repeating: 0, count: bandCount)
@@ -167,6 +170,8 @@ final class TapState: @unchecked Sendable {
         let c = Self.corners.map { Float(1 - exp(-2 * Double.pi * $0 / max(sampleRate, 8000))) }
         coeff = (c[0], c[1], c[2])
         lp = (0, 0, 0)
+        limit = 1
+        release = Float(1 - exp(-1 / (0.15 * max(sampleRate, 8000))))   // back to full in ~150 ms
     }
 
     func store(_ b0: Float, _ b1: Float, _ b2: Float, _ b3: Float) {
@@ -351,30 +356,33 @@ final class AppVolumeTap {
         state.store(sqrt(s0 / n), sqrt(s1 / n), sqrt(s2 / n), sqrt(s3 / n))
         guard !passthrough else { return }
 
-        // Volume: tap input -> device output, gain ramped across the buffer.
-        var outChannel = 0
-        for obuf in outList {
-            let oc = Int(obuf.mNumberChannels)
-            defer { outChannel += oc }
-            guard oc > 0, let dst = obuf.mData?.assumingMemoryBound(to: Float.self) else { continue }
-            let count = min(frames, Int(obuf.mDataByteSize) / (MemoryLayout<Float>.size * oc))
-            for ch in 0..<oc {
-                let sc = (outChannel + ch) % fc
-                var g = start
-                for f in 0..<count {
-                    g += step
-                    dst[f * oc + ch] = softClip(src[f * fc + sc] * g)
-                }
+        // Volume: tap input -> device output, gain ramped across the buffer. Above 100% a peak
+        // limiter keeps the result under full scale: it turns down at once when a peak would clip
+        // and eases back over ~150 ms, so the boost goes into the quieter parts, not crackle.
+        var lim = state.limit
+        let release = state.release
+        g = start
+        for f in 0..<frames {
+            g += step
+            var peak: Float = 0
+            for ch in 0..<fc { peak = max(peak, abs(src[f * fc + ch])) }
+            peak *= g
+            let wanted: Float = peak * lim > Self.ceiling ? Self.ceiling / peak : 1
+            if wanted < lim { lim = wanted } else { lim += (1 - lim) * release }
+            let k = g * lim
+            var outChannel = 0
+            for obuf in outList {
+                let oc = Int(obuf.mNumberChannels)
+                defer { outChannel += oc }
+                guard oc > 0, let dst = obuf.mData?.assumingMemoryBound(to: Float.self),
+                      f < Int(obuf.mDataByteSize) / (MemoryLayout<Float>.size * oc) else { continue }
+                for ch in 0..<oc { dst[f * oc + ch] = src[f * fc + (outChannel + ch) % fc] * k }
             }
         }
+        state.limit = lim
         state.current = target
     }
 
-    /// Transparent below 0.8; above it, compresses smoothly toward ±1 so boosted audio doesn't crackle.
-    private static func softClip(_ x: Float) -> Float {
-        let a = abs(x)
-        guard a > 0.8 else { return x }
-        let y = 0.8 + 0.2 * tanh((a - 0.8) / 0.2)
-        return x < 0 ? -y : y
-    }
+    /// The loudest a sample may leave nxtch: just under full scale.
+    static let ceiling: Float = 0.97
 }

@@ -6,7 +6,7 @@ i wanted four small things on my mac: a volume knob per app, a place to park a f
 
 | need | what nxtch does | what it leaves out |
 | --- | --- | --- |
-| per-app volume | 0 - 150% and mute for every app making sound, with a live meter | eq, effects, per-app output device |
+| per-app volume | 0 - 125% and mute for every app making sound, with a live meter | eq, effects, per-app output device |
 | whats playing | title, artist, progress, previous / play-pause / next | album art |
 | a shelf | drop anything on the notch, drag it out and the original moves there | conversion, renaming, sync |
 | clipboard history | text, images and files. ⌃⌥V to search, return to paste | rich text, snippets, sync |

@@ -58,7 +58,7 @@ struct NotchView: View {
                                 shelf: shelf, clipboard: clipboard)
                         .padding(.horizontal, NotchViewModel.contentInset)
                         .padding(.bottom, 10)
-                        .transition(.opacity.combined(with: .scale(scale: 0.92, anchor: .top)))
+                        .transition(.opacity.combined(with: .scale(scale: Motion.scale(0.92), anchor: .top)))
                 } else {
                     ClosedContent(vm: vm, model: model, nowPlaying: nowPlaying, shelf: shelf, showEars: earsVisible, showMeter: settings.showMeters, leftEar: leftEar)
                         .transition(.opacity)
@@ -122,6 +122,7 @@ private struct ClosedContent: View {
                         }
                     }
                     .frame(width: leftEar)
+                    .animation(.fade, value: nowPlaying.artwork)   // a new song's cover fades in
                     Spacer(minLength: vm.geometry.notchSize.width)
                     if showMeter {
                         LevelMeter(state: model.mixMeter, colors: model.playingColors)

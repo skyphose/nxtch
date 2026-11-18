@@ -39,13 +39,26 @@ extension Animation {
     static let notch = Animation.spring(response: 0.3, dampingFraction: 0.86)
     /// The panel closing: quicker, and no bounce on the way out.
     static let notchClose = Animation.spring(response: 0.24, dampingFraction: 1)
-    /// Small controls reacting to the pointer.
+    /// Small controls reacting to the pointer, and pressing anything.
     static let control = Animation.spring(response: 0.2, dampingFraction: 0.7)
+    /// A clipboard row floating up under the cursor: a little bounce.
+    static let lift = Animation.spring(response: 0.22, dampingFraction: 0.6)
+    /// A row popping when it's copied: more bounce, so it reads as done.
+    static let pop = Animation.spring(response: 0.25, dampingFraction: 0.5)
+    /// Shade and image changes: nothing moves, so no spring.
+    static let fade = Animation.easeOut(duration: 0.15)
 
     /// With Reduce Motion on, a short fade replaces the springs.
     static func notch(opening: Bool) -> Animation {
-        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? .easeOut(duration: 0.12) : (opening ? .notch : .notchClose)
+        Motion.reduced ? .fade : (opening ? .notch : .notchClose)
     }
+}
+
+enum Motion {
+    /// Reduce Motion is on: things fade or change shade, nothing grows, shrinks or bounces.
+    static var reduced: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+    /// `s`, or 1 with Reduce Motion on.
+    static func scale(_ s: CGFloat) -> CGFloat { reduced ? 1 : s }
 }
 
 // MARK: Logging
