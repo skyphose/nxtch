@@ -174,7 +174,9 @@ private struct OpenContent: View {
                     Toggle("Activity Beside Notch", isOn: $settings.showEars)
                     Toggle("Level Meters", isOn: $settings.showMeters)
                     Toggle("Full Screen", isOn: $settings.showInFullScreen)
-                    Toggle("Clipboard History", isOn: $settings.clipboardEnabled)
+                    Picker("Clipboard History", selection: $settings.clipboardKeep) {
+                        ForEach(ClipboardKeep.allCases) { Text($0.title).tag($0) }
+                    }
                     Picker("Clipboard Shortcut", selection: $settings.clipboardShortcut) {
                         ForEach(ClipboardShortcut.allCases) { Text($0.title).tag($0) }
                     }

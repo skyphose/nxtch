@@ -148,6 +148,12 @@ final class ClipboardTrimTests: XCTestCase {
         XCTAssertEqual(dropped.count, 1)
     }
 
+    func testTheChosenTimeIsTheLimit() {
+        let items = [item(ageDays: 0.5 / 24), item(ageDays: 2 / 24), item(ageDays: 20), item(ageDays: 40)]
+        XCTAssertEqual(ClipboardStore.trimmed(items, now: now, maxAge: ClipboardKeep.hour.maxAge).kept.count, 1)
+        XCTAssertEqual(ClipboardStore.trimmed(items, now: now, maxAge: ClipboardKeep.month.maxAge).kept.count, 3)
+    }
+
     func testPinnedItemsSurviveAgeAndTheLimit() {
         var items = (0..<150).map { _ in item(ageDays: 0) }
         items.append(item(ageDays: 400, pinned: true))

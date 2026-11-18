@@ -60,7 +60,8 @@ final class ClipboardStore: ObservableObject {
 
     nonisolated static let unpinnedLimit = 100
     /// Unpinned items older than this are dropped, so a copied secret doesn't sit on disk forever.
-    nonisolated static let maxAge: TimeInterval = 7 * 24 * 3600
+    /// Set from the Clipboard History menu.
+    var maxAge: TimeInterval = ClipboardKeep.week.maxAge
     static let maxImageBytes = 20 * 1024 * 1024
     static let maxImagePixels = 50_000_000
     static let maxTextLength = 50_000
@@ -269,7 +270,7 @@ final class ClipboardStore: ObservableObject {
     /// Drops unpinned items that are too old or beyond the limit. Returns whether anything went.
     @discardableResult
     private func trim() -> Bool {
-        let (kept, dropped) = Self.trimmed(items, now: Date())
+        let (kept, dropped) = Self.trimmed(items, now: Date(), maxAge: maxAge)
         dropped.forEach(deleteImage)
         if !dropped.isEmpty { items = kept }   // no redraw when nothing went
         return !dropped.isEmpty
@@ -277,7 +278,7 @@ final class ClipboardStore: ObservableObject {
 
     /// The rule itself: pinned items always stay. Unpinned ones go once they are older than
     /// `maxAge`, or once there are more than `unpinnedLimit` ahead of them (newest first).
-    nonisolated static func trimmed(_ items: [ClipItem], now: Date) -> (kept: [ClipItem], dropped: [ClipItem]) {
+    nonisolated static func trimmed(_ items: [ClipItem], now: Date, maxAge: TimeInterval = ClipboardKeep.week.maxAge) -> (kept: [ClipItem], dropped: [ClipItem]) {
         let cutoff = now.addingTimeInterval(-maxAge)
         var kept: [ClipItem] = [], dropped: [ClipItem] = [], unpinned = 0
         for item in items {

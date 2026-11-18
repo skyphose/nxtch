@@ -27,7 +27,7 @@ all four live in one app: a 0.7 MB binary, one process, apple frameworks only, n
 - you want widgets: calendar, weather, battery, a camera mirror. boring.notch has those.
 - you live on an external display. nxtch sits on the notch screen only.
 - you need rich text out of your clipboard history. it keeps plain text, images and file reefrences.
-- you copy passwords out of a browser extension or a terminal. those look like any other text, so they sit in the clipboard history for up to 7 days unless you delete them.
+- you copy passwords out of a browser extension or a terminal. those look like any other text, so they sit in the clipboard history for as long as you set it to keep things (a week unless you change it, a month at most) unless you delete them.
 - you dont want an app that leans on private api. now playing uses apple's `MediaRemote` framework through `osascript`, and a future macos can break it.
 - you wont click past apple's warning. macos makes you allow the download once. building it yourself skips that.
 
@@ -95,7 +95,7 @@ ad hoc has a cost beyond the nagging: you get used to re-approving audio and acc
 | open | rest the pointer on the notch or the icons beside it, drag something onto it, or press ⌃⌥V |
 | close | move away, press esc, or click somewhere else |
 | tabs | icons left of the notch: media, shelf, clipboard. or swipe sideways with two fingers |
-| settings | gear right of the notch: launch at login, activity beside notch, level meters, full screen, clipboard history, clipboard shortcut, about, quit |
+| settings | gear right of the notch: launch at login, activity beside notch, level meters, full screen, clipboard history (off, or keep for 1 hour up to 1 month), clipboard shortcut, about, quit |
 
 ### media
 
@@ -137,7 +137,7 @@ press ⌃⌥V anywhere and type to search. ↑/↓ moves the selection, return p
 - to delete some entries and keep the rest, click the check mark button, pick the rows, then the trash. ⌘-click a row does the same without the button. the trash deletes what you picked, pinned or not. outside select mode it clears everything unpinned.
 - anything a password manager marks as concealed or transient is never recroded. nothing is recorded while a password manager is in front, or was at any point since the last check (once a second), since not all of them mark their items. the list is in `Clipboard.swift`. four of the ids on it (macpass, strongbox, keeper, nordpass) i wrote down without an install to check against.
 - a password copied from a browser extension or a terminal looks like any other text, so that still gets recorded. delete it, or pause recording first.
-- unpinned items are dropped after 7 days.
+- unpinned items are dropped after the time picked under clipboard history: 1 hour, 1 day, 1 week (the default), 2 weeks or 1 month. picking a shorter time drops the older ones right away.
 - things copied on your iphone (universal clipboard) arent recorded. untested.
 - text is capped at 50,000 characters. images over 20 MB or 50 megapixels are skipped.
 - history lives in `~/Library/Application Support/nxtch/Clipboard`, readable by your user only and kept out of time machine.

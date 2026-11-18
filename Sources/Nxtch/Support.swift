@@ -163,6 +163,35 @@ enum KeyLayout {
     static var pasteV: Int { code(for: "v", command: true) ?? v }
 }
 
+/// How long clipboard history keeps unpinned items. Off stops recording; what is already there stays,
+/// and still goes after a week.
+enum ClipboardKeep: String, CaseIterable, Identifiable {
+    case off, hour, day, week, twoWeeks, month
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .off: return "Off"
+        case .hour: return "1 Hour"
+        case .day: return "1 Day"
+        case .week: return "1 Week"
+        case .twoWeeks: return "2 Weeks"
+        case .month: return "1 Month"
+        }
+    }
+
+    var maxAge: TimeInterval {
+        switch self {
+        case .hour: return 3600
+        case .day: return 86_400
+        case .off, .week: return 7 * 86_400
+        case .twoWeeks: return 14 * 86_400
+        case .month: return 30 * 86_400
+        }
+    }
+}
+
 enum ClipboardShortcut: String, CaseIterable, Identifiable {
     case controlOptionV, controlCommandV, controlShiftV, off
 

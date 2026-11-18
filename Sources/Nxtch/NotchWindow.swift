@@ -260,6 +260,10 @@ final class NotchController {
             sensor.orderFrontRegardless()
         }
         clipboard.enabled = settings.clipboardEnabled
+        if clipboard.maxAge != settings.clipboardKeep.maxAge {
+            clipboard.maxAge = settings.clipboardKeep.maxAge
+            clipboard.expire()   // a shorter time takes effect now, not at the next copy
+        }
         if let hotkey, settings.clipboardShortcut != appliedShortcut {
             hotkey.set(settings.clipboardShortcut)
             appliedShortcut = settings.clipboardShortcut

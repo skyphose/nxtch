@@ -7,8 +7,9 @@ struct ClipboardTab: View {
     @ObservedObject var store: ClipboardStore
     let enabled: Bool
     let shortcut: ClipboardShortcut
-    /// Where the list sits inside its scroll view, for the scroll bar.
-    @StateObject private var scroll = ScrollTracker()
+    /// Where the list sits inside its scroll view, for the scroll bar. Held, not observed: only the
+    /// bar redraws as the list scrolls, not every row.
+    @State private var scroll = ScrollTracker()
 
     var body: some View {
         VStack(spacing: 4) {
@@ -124,6 +125,7 @@ private struct ScrollViewFinder: NSViewRepresentable {
         let tracker: ScrollTracker
         init(tracker: ScrollTracker) { self.tracker = tracker; super.init(frame: .zero) }
         required init?(coder: NSCoder) { nil }
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }   // never takes the rows' clicks
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             DispatchQueue.main.async { [weak self] in
@@ -154,9 +156,9 @@ private struct ClipScrollBar: View {
                 .frame(width: active ? 5 : 3, height: thumb)
                 .frame(width: 9, height: thumb)   // a wider target than it looks
                 .contentShape(Rectangle())
+                .onHover { hovering = $0 }   // the bar only, not the whole list
                 .offset(y: fraction * track)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                .onHover { hovering = $0 }
                 .gesture(DragGesture(minimumDistance: 0)
                     .onChanged { v in
                         let start = dragStart ?? fraction * track
