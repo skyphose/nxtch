@@ -8,8 +8,9 @@ struct ClipboardTab: View {
     let enabled: Bool
     let shortcut: ClipboardShortcut
     /// Where the list sits inside its scroll view, for the scroll bar. Held, not observed: only the
-    /// bar redraws as the list scrolls, not every row.
-    @State private var scroll = ScrollTracker()
+    /// bar redraws as the list scrolls, not every row. One for the life of the app (not @State,
+    /// which needs Xcode's macro plugin: the command line tools can't build it).
+    private var scroll: ScrollTracker { ScrollTracker.clipboard }
 
     var body: some View {
         VStack(spacing: 4) {

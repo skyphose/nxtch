@@ -6,7 +6,7 @@ struct MediaTab: View {
     @ObservedObject var nowPlaying: NowPlayingMonitor
     let meters: Bool
     /// For the scroll bar. Held, not observed, so scrolling only redraws the bar.
-    @State private var scroll = ScrollTracker()
+    private var scroll: ScrollTracker { ScrollTracker.mixer }
 
     var body: some View {
         VStack(spacing: 0) {

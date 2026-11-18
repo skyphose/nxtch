@@ -7,6 +7,14 @@ import SwiftUI
     @Published private(set) var viewport: CGFloat = 0
     @Published private(set) var content: CGFloat = 0
     @Published private(set) var offset: CGFloat = 0
+    /// The bar's own state: kept here because @State needs Xcode's macro plugin.
+    @Published var hovering = false
+    @Published var dragStart: CGFloat?
+
+    /// One per list, for the life of the app. Each opening re-attaches it to the new scroll view
+    /// and lets go of the old one.
+    static let clipboard = ScrollTracker()
+    static let mixer = ScrollTracker()
     private weak var scrollView: NSScrollView?
     private var observers: [NSObjectProtocol] = []
 
@@ -32,6 +40,8 @@ import SwiftUI
         observers.forEach(NotificationCenter.default.removeObserver)
         observers = []
         scrollView = nil
+        hovering = false   // closed under the pointer: the next opening starts unlit
+        dragStart = nil
     }
 
     private func update() {
@@ -84,8 +94,6 @@ struct ScrollViewFinder: NSViewRepresentable {
 /// scroll bar only shows while scrolling; this one stays, and can be dragged.
 struct ThinScrollBar: View {
     @ObservedObject var tracker: ScrollTracker
-    @State private var hovering = false
-    @State private var dragStart: CGFloat?
 
     var body: some View {
         let viewport = tracker.viewport
@@ -94,22 +102,22 @@ struct ThinScrollBar: View {
             let thumb = max(18, viewport * viewport / tracker.content)
             let track = viewport - thumb
             let fraction = min(1, max(0, tracker.offset / overflow))
-            let active = hovering || dragStart != nil
+            let active = tracker.hovering || tracker.dragStart != nil
             Capsule()
                 .fill(.white.opacity(active ? 0.5 : 0.25))
                 .frame(width: active ? 5 : 3, height: thumb)
                 .frame(width: 9, height: thumb)   // a wider target than it looks
                 .contentShape(Rectangle())
-                .onHover { hovering = $0 }   // the bar only, not the whole list
+                .onHover { tracker.hovering = $0 }   // the bar only, not the whole list
                 .offset(y: fraction * track)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 .gesture(DragGesture(minimumDistance: 0)
                     .onChanged { v in
-                        let start = dragStart ?? fraction * track
-                        if dragStart == nil { dragStart = start }
+                        let start = tracker.dragStart ?? fraction * track
+                        if tracker.dragStart == nil { tracker.dragStart = start }
                         if track > 0 { tracker.scroll(to: (start + v.translation.height) / track) }
                     }
-                    .onEnded { _ in dragStart = nil })
+                    .onEnded { _ in tracker.dragStart = nil })
                 .animation(.fade, value: active)
         }
     }

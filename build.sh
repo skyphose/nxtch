@@ -48,6 +48,13 @@ fi
 
 # swiftc directly, not swift build: the free command line tools can compile nxtch this way, while
 # their swiftpm fails on recent macOS. So full Xcode is not needed. (swift test still uses swiftpm.)
+# SwiftUI's macros (@State, @FocusState, @Observable, #Preview) need a plugin that ships with Xcode,
+# not with the command line tools, so they build here and break for anyone without Xcode. 0.6.6
+# shipped @State and a friend's build failed: this stops it before it compiles.
+if grep -nE '@(State|FocusState|Observable|Entry|Previewable)\b|#Preview' Sources/Nxtch/*.swift | grep -v '^[^:]*:[0-9]*: *//'; then
+  echo "build.sh: the lines above use a SwiftUI macro, which only builds with full Xcode. Use a property wrapper (@StateObject, @ObservedObject) or plain state instead." >&2
+  exit 1
+fi
 rm -rf "$APP" && mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" .build
 # Apple silicon only: every Mac with a notch has one.
 xcrun swiftc -O -wmo -module-name Nxtch -target arm64-apple-macosx14.2 \
