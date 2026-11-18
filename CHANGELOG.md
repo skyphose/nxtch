@@ -2,7 +2,9 @@
 
 newest first. every version is a git tag, so `git checkout v0.3.0` gets you that build.
 
-## unreleased
+## 0.6.7 - 2026-11-18
+
+builds without xcode again.
 
 - fixed: 0.6.6 didnt build without full xcode. the scroll bar used swiftui's `@State`, which needs a plugin the command line tools dont have. my builds had xcode, so i didnt see it. `build.sh` now stops with the line number if anything uses one of those.
 
