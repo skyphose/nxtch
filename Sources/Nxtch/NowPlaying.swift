@@ -2,8 +2,10 @@ import AppKit
 import Combine
 
 // Since macOS 15.4 the private MediaRemote framework only answers Apple-signed processes, so
-// nxtch talks to it through one: /usr/bin/osascript running JXA. A long-running helper reports
-// what's playing; each playback button runs a short one-shot script.
+// nxtch talks to it through one. What's playing comes from /usr/bin/perl running nxtch's helper
+// library (Helper/NowPlayingHelper.m), which also hands over the cover. If that ever stops
+// working, /usr/bin/osascript running JXA takes over, without covers. Each playback button runs
+// a short one-shot JXA script.
 
 struct NowPlayingInfo: Equatable {
     var title: String
@@ -16,9 +18,9 @@ struct NowPlayingInfo: Equatable {
     var duration: Double?
     var timestamp: Date?
     var rate: Double
-    /// Spotify's address for the cover. Only the address: the image itself comes from Spotify's
-    /// cache on disk (see `SpotifyArtwork`), never from the network.
-    var artworkURL: String? = nil
+    /// Which cover goes with the song, when the helper has one. The image itself comes once, in
+    /// the line where this id first appears.
+    var artID: String? = nil
 
     func belongs(to appID: String) -> Bool { bundleID == appID || parentBundleID == appID }
 
@@ -50,7 +52,7 @@ extension NowPlayingInfo {
             duration: seconds("duration").flatMap { $0 > 0 ? $0 : nil },
             timestamp: (o["timestamp"] as? Double).flatMap { $0.isFinite ? Date(timeIntervalSince1970: $0) : nil },
             rate: (o["rate"] as? Double).map { $0.isFinite ? min(max($0, -8), 8) : 1 } ?? 1,
-            artworkURL: (o["artwork"] as? String).flatMap(SpotifyArtwork.validURL))
+            artID: (o["artID"] as? String).flatMap { $0.count <= 32 ? $0 : nil })
     }
 }
 
@@ -70,6 +72,15 @@ final class NowPlayingMonitor: ObservableObject {
 
     private var process: Process?
     private var buffer = Data()
+    /// The Perl helper, until it fails three times in a row within a minute of starting. Then
+    /// the osascript one, for the rest of this run.
+    private var perlFailures = 0
+    private var usingPerl: Bool { perlFailures < 3 && Self.helperLibrary != nil }
+    private static let helperLibrary: URL? = {
+        guard let url = Bundle.main.privateFrameworksURL?.appendingPathComponent("NowPlayingHelper.dylib"),
+              FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return url
+    }()
     private var restartDelay: TimeInterval = 2
 
     /// The helper is a second process of about 22 MB, more than nxtch itself. So it only runs
@@ -133,8 +144,9 @@ final class NowPlayingMonitor: ObservableObject {
 
     private func launch() {
         guard needed, process == nil else { return }   // a restart that was queued before a stop
-        Log.audio.info("now-playing helper started")
-        let pipe = Pipe()   // JXA console.log writes to stderr
+        let perl = usingPerl
+        Log.audio.info("now-playing helper started: \(perl ? "perl" : "osascript", privacy: .public)")
+        let pipe = Pipe()   // the Perl helper prints to stdout, JXA console.log to stderr: both here
         self.pipe = pipe
         pipe.fileHandleForReading.readabilityHandler = { [weak self] h in
             let data = h.availableData
@@ -142,12 +154,16 @@ final class NowPlayingMonitor: ObservableObject {
             onMain { self?.consume(data) }
         }
         let started = Date()
-        process = Self.osascript(Self.monitorScript, String(ProcessInfo.processInfo.processIdentifier), stderr: pipe)
+        process = perl ? Self.perlHelper(pipe) : Self.osascript(Self.monitorScript, String(ProcessInfo.processInfo.processIdentifier), stderr: pipe)
         process?.terminationHandler = { [weak self] _ in
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     guard let self else { return }
                     self.process = nil
+                    if perl {
+                        self.perlFailures = Date().timeIntervalSince(started) < 60 ? self.perlFailures + 1 : 0
+                        if !self.usingPerl { Log.audio.error("perl helper keeps failing: using osascript, without covers") }
+                    }
                     // Restart, backing off if it keeps dying right away.
                     self.restartDelay = Date().timeIntervalSince(started) > 60 ? 2 : min(self.restartDelay * 2, 300)
                     after(self.restartDelay) { self.launch() }
@@ -156,9 +172,24 @@ final class NowPlayingMonitor: ObservableObject {
         }
     }
 
+    /// `/usr/bin/perl` loading the helper library and running it.
+    private static func perlHelper(_ out: Pipe) -> Process? {
+        guard let lib = helperLibrary else { return nil }
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
+        p.arguments = ["-e", #"use DynaLoader; my $h = DynaLoader::dl_load_file($ARGV[0], 0) or die "load\n"; "#
+                       + #"my $s = DynaLoader::dl_find_symbol($h, "nxtch_now_playing") or die "symbol\n"; "#
+                       + #"DynaLoader::dl_install_xsub("main::run", $s); run();"#, lib.path]
+        p.environment = ["HOME": NSHomeDirectory()]
+        p.standardOutput = out
+        p.standardError = out
+        do { try p.run(); return p } catch { NSLog("nxtch: perl failed: \(error)"); return nil }
+    }
+
     private func consume(_ data: Data) {
         buffer.append(data)
-        if buffer.count > 1 << 20 { buffer.removeAll() }   // a line is a few hundred bytes
+        // A line is a few hundred bytes, or a few hundred KB when it carries a cover.
+        if buffer.count > 16 << 20 { buffer.removeAll() }
         while let nl = buffer.firstIndex(of: 0x0A) {
             let line = buffer[buffer.startIndex..<nl]
             buffer.removeSubrange(buffer.startIndex...nl)
@@ -168,23 +199,26 @@ final class NowPlayingMonitor: ObservableObject {
 
     /// The cover for `info`, when there is one.
     @Published private(set) var artwork: NSImage?
-    private var artworkFor: String?
+    private var artworkID: String?
 
-    private func loadArtwork(_ url: String?) {
-        guard url != artworkFor else { return }
-        artworkFor = url
-        artwork = nil
-        guard let url else { return }
-        Log.audio.info("cover asked for")
-        SpotifyArtwork.load(url, wanted: { [weak self] in self?.artworkFor == url }) { [weak self] image in
-            guard let self, self.artworkFor == url else { return }
-            self.artwork = image
+    /// Takes the cover from the helper's line. macOS sometimes drops the cover for a moment in the
+    /// middle of a song: then the one already showing stays, as long as the song is the same.
+    private func takeArtwork(_ o: [String: Any], _ new: NowPlayingInfo?) {
+        if let b64 = o["art"] as? String, let id = new?.artID, b64.count < 12 << 20,
+           let data = Data(base64Encoded: b64), let image = NSImage(data: data) {
+            artworkID = id
+            artwork = image
+            Log.audio.info("cover in: \(data.count, privacy: .public) bytes")
+        } else if let id = new?.artID {
+            if id != artworkID { artwork = nil; artworkID = nil }   // not seen yet: the next line brings it
+        } else if new?.title != reported?.title || new?.artist != reported?.artist || new?.bundleID != reported?.bundleID {
+            artwork = nil; artworkID = nil
         }
     }
 
     private func handle(_ o: [String: Any]) {
         let new = NowPlayingInfo(json: o)
-        loadArtwork(new?.artworkURL)
+        takeArtwork(o, new)
         let ownerMoved = new?.bundleID != reported?.bundleID || new?.parentBundleID != reported?.parentBundleID
         reported = new
         info = new
@@ -215,7 +249,7 @@ final class NowPlayingMonitor: ObservableObject {
       ObjC.bindFunction('MRMediaRemoteRegisterForNowPlayingNotifications', ['void', ['id']]);
       const R = $.NSClassFromString('MRNowPlayingRequest');
       const str = (d, k) => { const v = d.objectForKey(k); return v.isNil() ? null : ObjC.unwrap(v); };
-      let last = '', due = 0, safety = 0, artKey = '', artURL = null, artTries = 0;
+      let last = '', due = 0, safety = 0;
       $.NSNotificationCenter.defaultCenter.addObserverForNameObjectQueueUsingBlock($(), $(), $.NSOperationQueue.mainQueue, n => {
         const name = ObjC.unwrap(n.name);
         if (!due && (name.indexOf('MRMediaRemote') >= 0 || name.indexOf('NowPlaying') >= 0)) due = Date.now() + 200;
@@ -242,25 +276,6 @@ final class NowPlayingMonitor: ObservableObject {
           if (c && !c.isNil()) {
             out.bundle = ObjC.unwrap(c.bundleIdentifier);
             out.parent = ObjC.unwrap(c.parentApplicationBundleIdentifier);
-          }
-          // Spotify knows which cover goes with the song. Asked once per song, and only while
-          // Spotify is already running: asking never launches it.
-          if (out.bundle === 'com.spotify.client' && out.title) {
-            const key = out.title + '\u0000' + (out.artist || '');
-            if (key !== artKey) {
-              artKey = key; artURL = null;
-              // Spotify can still be on the last song for a moment: then ask again next time.
-              try {
-                const sp = Application('Spotify');
-                if (sp.running()) {
-                  const t = sp.currentTrack;
-                  const same = t.name() === out.title;
-                  if (same || ++artTries > 5) { artURL = same ? t.artworkUrl() : null; artTries = 0; }
-                  else { artKey = ''; due = Date.now() + 500; }
-                }
-              } catch (e) {}
-            }
-            if (artURL) out.artwork = artURL;
           }
         } catch (e) { out.error = String(e); }
         const j = JSON.stringify(out);

@@ -28,7 +28,7 @@ all four live in one app: a 0.7 MB binary, one process, apple frameworks only, n
 - you live on an external display. nxtch sits on the notch screen only.
 - you need rich text out of your clipboard history. it keeps plain text, images and file reefrences.
 - you copy passwords out of a browser extension or a terminal. those look like any other text, so they sit in the clipboard history for as long as you set it to keep things (a week unless you change it, a month at most) unless you delete them.
-- you dont want an app that leans on private api. now playing uses apple's `MediaRemote` framework through `osascript`, and a future macos can break it.
+- you dont want an app that leans on private api. now playing uses apple's `MediaRemote` framework through apple's own `perl` and `osascript`, and a future macos can break it.
 - you wont click past apple's warning. macos makes you allow the download once. building it yourself skips that.
 
 ## install
@@ -157,7 +157,7 @@ with an ad hoc signature macos may ask again after every update. signing with yo
 
 **meters.** the tap callback splits each app's audio into four bands with one-pole filters. meters are drawn with `CALayer`s and only run where you can see them.
 
-**now playing.** since macos 15.4, `MediaRemote` only answers apple-signed programs. so nxtch asks through `osascript` (jxa), which is apple-signed. a helper reports title, artist and position. it only runs while an app is playing or the notch is open, and quits 2 minutes after. it waits for macos to say something changed instead of checking every second. the playback buttons send comamnds the same way, so they need no permission.
+**now playing.** since macos 15.4, `MediaRemote` only answers apple-signed programs. so nxtch asks through one: `/usr/bin/perl` loads a small library of nxtch's (`Helper/NowPlayingHelper.m`) that reports title, artist, position and the cover, from any app. the idea comes from [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter). the helper only runs while an app is playing or the notch is open, quits 2 minutes after, and quits on its own if nxtch goes away. it waits for macos to say something changed instead of checking every second. if perl ever stops working, an `osascript` (jxa) helper takes over, without covers. the playback buttons go through `osascript`, so they need no permission.
 
 **the notch panel.** a borderless, non-activating `NSPanel` above the menu bar. it tries hard to stay out of the way:
 
@@ -191,11 +191,14 @@ Sources/Nxtch/
   MediaTab.swift      now-playing card, mixer rows
   ShelfTab.swift      shelf tiles, delete zone, drag source
   ClipboardTab.swift  search field, history rows
+  ScrollBar.swift     the thin scroll bar on the clipboard and mixer lists
   MixerModel.swift    finds which apps make sound, keeps taps in sync, saves volumes
   Audio.swift         core audio helpers, process tap, real-time render callback
-  NowPlaying.swift    now-playing helper and playback commands (osascript)
+  NowPlaying.swift    runs the now-playing helper, playback commands (osascript)
   Shelf.swift         shelf store: drops, selection, thumbnails
   Clipboard.swift     clipboard history store
+Helper/
+  NowPlayingHelper.m  the now-playing helper: a library /usr/bin/perl loads
 Tests/NxtchTests/     the rules that need no notch: file names, expiry, parsing, levels, colors
 .github/workflows/release.yml   builds the release zip from a version tag
 Resources/Info.plist

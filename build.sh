@@ -54,11 +54,18 @@ xcrun swiftc -O -wmo -module-name Nxtch -target arm64-apple-macosx14.2 \
   -module-cache-path .build/module-cache Sources/Nxtch/*.swift -o "$APP/Contents/MacOS/Nxtch"
 # Local symbol names are only for debuggers: about half the binary, none of it loaded at run time.
 strip -x "$APP/Contents/MacOS/Nxtch"
+# The now-playing helper: a small library that /usr/bin/perl loads, since macOS only lets Apple's
+# own programs read what's playing (see Helper/NowPlayingHelper.m). Signed before the app is.
+mkdir -p "$APP/Contents/Frameworks"
+xcrun clang -arch arm64 -mmacosx-version-min=14.2 -dynamiclib -fobjc-arc -O2 -Wall \
+  -framework Foundation -framework AppKit Helper/NowPlayingHelper.m -o "$APP/Contents/Frameworks/NowPlayingHelper.dylib"
+strip -x "$APP/Contents/Frameworks/NowPlayingHelper.dylib"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
 SIGN_ID=${SIGN_ID:-$(security find-identity -v -p codesigning | awk -F'"' '/Apple Development/ {print $2; exit}')}
 # Hardened runtime blocks DYLD_INSERT_LIBRARIES injection into nxtch and its permissions.
+codesign --force --sign "${SIGN_ID:--}" "$APP/Contents/Frameworks/NowPlayingHelper.dylib"
 codesign --force --options runtime --sign "${SIGN_ID:--}" "$APP"
 echo "Built $(pwd)/$APP (signed: ${SIGN_ID:-ad hoc})"
 
