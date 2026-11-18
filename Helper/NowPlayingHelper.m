@@ -31,6 +31,9 @@ static NSString *last;
 /// then only its id. A new song gets it again even with the same cover (an album), since nxtch
 /// drops a cover when the song changes.
 static NSMutableDictionary<NSString *, NSString *> *sentArt;
+/// Per app: the song its cover was last fetched for, and that cover's id. A cover is only fetched
+/// again when the song changes (or there was none): fetching it on every look was most of the cost.
+static NSMutableDictionary<NSString *, NSArray *> *knownArt;
 static BOOL due;
 static pid_t parent;
 // Kept here, not as locals: ARC may free a local after its last use, even in a function that
@@ -108,8 +111,9 @@ static void readApps(void (^done)(NSArray *)) {
         __block NSInteger pending = 1;
         __block BOOL finished = NO;
         void (^finish)(void) = ^{ if (!finished) { finished = YES; done(apps); } };
-        // An app that never answers doesn't hold up the rest for more than 2 s.
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), q, finish);
+        // An app slow to answer doesn't hold up the rest for more than 1 s. Its song still goes
+        // out if that much came; a cover that came too late is fetched again on a later look.
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), q, finish);
         id origin = localOrigin();
         Class pathClass = NSClassFromString(@"MRPlayerPath"), requestClass = NSClassFromString(@"MRNowPlayingRequest");
         if (!origin || !pathClass || !requestClass) { finish(); return; }
@@ -126,11 +130,22 @@ static void readApps(void (^done)(NSArray *)) {
             ((void (*)(id, SEL, id, id))objc_msgSend)(request, NSSelectorFromString(@"requestNowPlayingInfoOnQueue:completion:"), q, ^(id info, id error) {
                 song(e, info);
                 e[@"playing"] = [e[@"rate"] doubleValue] > 0 ? @YES : @NO;
+                NSString *songKey = [NSString stringWithFormat:@"%@\n%@\n%@", e[@"title"] ?: @"", e[@"artist"] ?: @"", e[@"album"] ?: @""];
+                NSArray *known = knownArt[bundle];
+                if (finished) return;
+                if (!e[@"title"]) { if (--pending == 0) finish(); return; }
+                [apps addObject:e];   // the song now; its cover joins it below if it's quick
+                if ([known[0] isEqualToString:songKey] && sentArt[bundle]) {
+                    e[@"artID"] = known[1];   // same song, cover already with nxtch
+                    if (--pending == 0) finish();
+                    return;
+                }
                 ((void (*)(id, SEL, id, id))objc_msgSend)(request, NSSelectorFromString(@"requestNowPlayingItemArtworkOnQueue:completion:"), q, ^(id artwork, id error) {
                     NSData *art = call(artwork, @"imageData");
                     if (!art && [info isKindOfClass:NSDictionary.class]) art = info[@"kMRMediaRemoteNowPlayingInfoArtworkData"];
                     if (finished) return;
-                    if (e[@"title"]) { cover(e, bundle, art); [apps addObject:e]; }
+                    cover(e, bundle, art);
+                    if (e[@"artID"]) knownArt[bundle] = @[ songKey, e[@"artID"] ]; else [knownArt removeObjectForKey:bundle];
                     if (--pending == 0) finish();
                 });
             });
@@ -153,6 +168,11 @@ static void readAll(void) {
                 if ([parentID isKindOfClass:NSString.class]) o[@"parent"] = parentID;
                 readApps(^(NSArray *apps) {
                     o[@"apps"] = apps;
+                    // An app left out of this read (it quit, or answered too late) is dropped by
+                    // nxtch, cover and all: forget it was sent, so it's sent again when it's back.
+                    NSMutableSet *present = [NSMutableSet set];
+                    for (NSDictionary *e in apps) [present addObject:e[@"bundle"]];
+                    for (NSString *b in sentArt.allKeys) if (![present containsObject:b]) { [sentArt removeObjectForKey:b]; [knownArt removeObjectForKey:b]; }
                     emit(o);
                     // macOS loads covers lazily: the first answer for a song often has none. Ask
                     // again a few times, 0.3, 0.6, 1.2 and 2.4 s later, while a playing app's
@@ -166,10 +186,17 @@ static void readAll(void) {
                         int64_t ms = 300LL << artTries++;
                         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, ms * NSEC_PER_MSEC), q, ^{ if (!due) readAll(); });
                     }
-                    // macOS only announces changes for its own pick. While another app has a
-                    // song too, look every 5 s, so its song change still shows.
-                    dispatch_source_set_timer(others, dispatch_time(DISPATCH_TIME_NOW, (apps.count > 1 ? 5 : 3600) * NSEC_PER_SEC),
-                                              (apps.count > 1 ? 5 : 3600) * NSEC_PER_SEC, NSEC_PER_SEC);
+                    // macOS only announces changes for its own pick. Another app's song change is
+                    // only seen by asking: every 1.5 s while one plays, every 5 s while one is
+                    // paused (it could start again), never while macOS's pick is the only one.
+                    BOOL otherPlaying = NO, otherSong = NO;
+                    for (NSDictionary *e in apps) {
+                        if ([e[@"bundle"] isEqual:bundle]) continue;
+                        otherSong = YES;
+                        if ([e[@"playing"] boolValue]) otherPlaying = YES;
+                    }
+                    int64_t every = otherPlaying ? 1500 : otherSong ? 5000 : 3600000;
+                    dispatch_source_set_timer(others, dispatch_time(DISPATCH_TIME_NOW, every * NSEC_PER_MSEC), every * NSEC_PER_MSEC, every * NSEC_PER_MSEC / 10);
                 });
             });
         });
@@ -198,6 +225,7 @@ extern void nxtch_now_playing(void) {
 
         q = dispatch_queue_create("nxtch.nowplaying", DISPATCH_QUEUE_SERIAL);
         sentArt = [NSMutableDictionary dictionary];
+        knownArt = [NSMutableDictionary dictionary];
         others = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, q);
         dispatch_source_set_timer(others, DISPATCH_TIME_FOREVER, 0, 0);
         dispatch_source_set_event_handler(others, ^{ soon(); });
