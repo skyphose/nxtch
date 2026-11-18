@@ -194,6 +194,13 @@ enum ClipboardKeep: String, CaseIterable, Identifiable {
         }
     }
 
+    /// The saved choice. Before the menu it was a switch: on kept a week.
+    static var saved: ClipboardKeep {
+        let d = UserDefaults.standard
+        return ClipboardKeep(rawValue: d.string(forKey: "clipboardKeep") ?? "")
+            ?? (d.object(forKey: "clipboardEnabled") as? Bool == false ? .off : .week)
+    }
+
     var maxAge: TimeInterval {
         switch self {
         case .hour: return 3600
@@ -223,7 +230,8 @@ enum ClipboardShortcut: String, CaseIterable, Identifiable {
     var keys: (code: Int, modifiers: Int)? {
         switch self {
         case .controlOptionV: return (KeyLayout.v, controlKey | optionKey)
-        case .controlCommandV: return (KeyLayout.v, controlKey | cmdKey)
+        // With ⌘ held, layouts like "Dvorak - QWERTY ⌘" switch to QWERTY: V is where ⌘ puts it.
+        case .controlCommandV: return (KeyLayout.pasteV, controlKey | cmdKey)
         case .controlShiftV: return (KeyLayout.v, controlKey | shiftKey)
         case .off: return nil
         }

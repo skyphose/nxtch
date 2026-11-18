@@ -61,7 +61,9 @@ final class ClipboardStore: ObservableObject {
     nonisolated static let unpinnedLimit = 100
     /// Unpinned items older than this are dropped, so a copied secret doesn't sit on disk forever.
     /// Set from the Clipboard History menu.
-    var maxAge: TimeInterval = ClipboardKeep.week.maxAge
+    /// Read at launch too: the first expiry runs before the settings are applied, and with the
+    /// default it would drop what "1 Month" was meant to keep.
+    var maxAge: TimeInterval = ClipboardKeep.saved.maxAge
     static let maxImageBytes = 20 * 1024 * 1024
     static let maxImagePixels = 50_000_000
     static let maxTextLength = 50_000

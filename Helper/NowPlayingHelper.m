@@ -22,6 +22,7 @@ static GetClientFn getClient;
 static GetPlayingFn getPlaying;
 static NSString *last;
 static uint64_t lastArt;
+static NSString *lastArtSong;   // the song the cover was last sent with
 static BOOL due;
 static pid_t parent;
 // Kept here, not as locals: ARC may free a local after its last use, even in a function that
@@ -76,14 +77,20 @@ static void readAll(void) {
                     if ([art isKindOfClass:NSData.class] && [art length] > 0 && [art length] < (8 << 20)) {
                         uint64_t h = fnv(art);
                         o[@"artID"] = [NSString stringWithFormat:@"%016llx", h];
-                        if (h != lastArt) {   // the image itself only once per cover; after that, its id
+                        // The image itself once per cover and song; after that, its id. A new song
+                        // gets it again even when the cover is the same (an album), since nxtch
+                        // drops the old cover when the song changes.
+                        NSString *song = [NSString stringWithFormat:@"%@\n%@", str(info, @"kMRMediaRemoteNowPlayingInfoTitle") ?: @"", str(info, @"kMRMediaRemoteNowPlayingInfoArtist") ?: @""];
+                        if (h != lastArt || ![song isEqualToString:lastArtSong]) {
                             lastArt = h;
+                            lastArtSong = song;
                             o[@"art"] = [art base64EncodedStringWithOptions:0];
                         }
                     }
                 }
                 if (bundle) o[@"bundle"] = bundle;
                 if (parentID) o[@"parent"] = parentID;
+                if (!o[@"artID"]) { lastArt = 0; lastArtSong = nil; }   // nxtch forgets it too
                 emit(o);
                 // macOS loads covers lazily: the first answer for a song often has none. Ask
                 // again a few times, 0.3, 0.6, 1.2 and 2.4 s later.

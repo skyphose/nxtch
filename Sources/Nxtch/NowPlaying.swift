@@ -72,6 +72,9 @@ final class NowPlayingMonitor: ObservableObject {
 
     private var process: Process?
     private var buffer = Data()
+    /// How far into `buffer` has been searched for a line end, so a cover line that arrives in
+    /// many pieces isn't rescanned from its start each time.
+    private var scanned = 0
     /// The Perl helper, until it fails three times in a row within a minute of starting. Then
     /// the osascript one, for the rest of this run.
     private var perlFailures = 0
@@ -108,7 +111,8 @@ final class NowPlayingMonitor: ObservableObject {
         process?.terminationHandler = nil
         process?.terminate()
         process = nil
-        buffer.removeAll()
+        buffer.removeAll(); scanned = 0
+        artwork = nil; artworkID = nil
         if reported != nil || info != nil {
             reported = nil
             info = nil
@@ -189,12 +193,14 @@ final class NowPlayingMonitor: ObservableObject {
     private func consume(_ data: Data) {
         buffer.append(data)
         // A line is a few hundred bytes, or a few hundred KB when it carries a cover.
-        if buffer.count > 16 << 20 { buffer.removeAll() }
-        while let nl = buffer.firstIndex(of: 0x0A) {
+        if buffer.count > 16 << 20 { buffer.removeAll(); scanned = 0 }
+        while let nl = buffer[(buffer.startIndex + scanned)...].firstIndex(of: 0x0A) {
             let line = buffer[buffer.startIndex..<nl]
-            buffer.removeSubrange(buffer.startIndex...nl)
             if let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any] { handle(obj) }
+            buffer.removeSubrange(buffer.startIndex...nl)
+            scanned = 0
         }
+        scanned = buffer.count
     }
 
     /// The cover for `info`, when there is one.

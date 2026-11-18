@@ -82,9 +82,7 @@ final class AppSettings: ObservableObject {
         showEars = d.bool(forKey: "showEars")
         showMeters = d.bool(forKey: "showMeters")
         showInFullScreen = d.bool(forKey: "showInFullScreen")
-        // Before the menu it was a switch: on kept a week.
-        clipboardKeep = ClipboardKeep(rawValue: d.string(forKey: "clipboardKeep") ?? "")
-            ?? (d.bool(forKey: "clipboardEnabled") ? .week : .off)
+        clipboardKeep = .saved
         clipboardShortcut = ClipboardShortcut(rawValue: d.string(forKey: "clipboardShortcut") ?? "") ?? .controlOptionV
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }

@@ -12,7 +12,7 @@ import SwiftUI
 
     func attach(_ sv: NSScrollView) {
         guard sv !== scrollView else { return }
-        observers.forEach(NotificationCenter.default.removeObserver)
+        detach()
         scrollView = sv
         sv.contentView.postsBoundsChangedNotifications = true
         sv.documentView?.postsFrameChangedNotifications = true
@@ -25,6 +25,13 @@ import SwiftUI
             },
         ]
         update()
+    }
+
+    /// Each opening of the notch builds a new list and tracker, so the old one's observers go.
+    func detach() {
+        observers.forEach(NotificationCenter.default.removeObserver)
+        observers = []
+        scrollView = nil
     }
 
     private func update() {
@@ -59,6 +66,10 @@ struct ScrollViewFinder: NSViewRepresentable {
         init(tracker: ScrollTracker) { self.tracker = tracker; super.init(frame: .zero) }
         required init?(coder: NSCoder) { nil }
         override func hitTest(_ point: NSPoint) -> NSView? { nil }   // never takes the rows' clicks
+        override func viewWillMove(toWindow newWindow: NSWindow?) {
+            super.viewWillMove(toWindow: newWindow)
+            if newWindow == nil { tracker.detach() }
+        }
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             DispatchQueue.main.async { [weak self] in
