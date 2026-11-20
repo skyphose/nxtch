@@ -2,7 +2,9 @@
 
 newest first. every version is a git tag, so `git checkout v0.3.0` gets you that build.
 
-## unreleased
+## 0.6.8 - 2026-11-20
+
+lighter covers.
 
 - covers are kept at 160 pixels, about as big as nxtch ever draws them. they came at up to 640 pixels and more, about 1.6 MB each once decoded. measured on my mac with one cover showing: 16.6 MB, down from 18.5.
 
