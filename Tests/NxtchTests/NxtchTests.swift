@@ -326,3 +326,15 @@ final class CardSongTests: XCTestCase {
         XCTAssertEqual(NowPlayingMonitor.cardSong([a, b], pick: "com.spotify.client") { _ in true }?.bundleID, "com.spotify.client")
     }
 }
+
+final class SmallCoverTests: XCTestCase {
+    func testCoversAreDecodedAt160Pixels() throws {
+        let big = NSImage(size: NSSize(width: 640, height: 640), flipped: false) { r in NSColor.systemPink.setFill(); r.fill(); return true }
+        let rep = try XCTUnwrap(NSBitmapImageRep(data: try XCTUnwrap(big.tiffRepresentation)))
+        let jpeg = try XCTUnwrap(rep.representation(using: .jpeg, properties: [:]))
+        let small = try XCTUnwrap(NowPlayingMonitor.smallCover(jpeg))
+        let cg = try XCTUnwrap(small.cgImage(forProposedRect: nil, context: nil, hints: nil))
+        XCTAssertEqual(max(cg.width, cg.height), 160)
+        XCTAssertNil(NowPlayingMonitor.smallCover(Data("not an image".utf8)))
+    }
+}

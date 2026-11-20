@@ -1,4 +1,5 @@
 import AppKit
+import ImageIO
 import Combine
 
 // Since macOS 15.4 the private MediaRemote framework only answers Apple-signed processes, so
@@ -248,12 +249,23 @@ final class NowPlayingMonitor: ObservableObject {
         return all.max { (score($0), $1.bundleID ?? "") < (score($1), $0.bundleID ?? "") }
     }
 
+    /// A cover decoded at 160 pixels. Covers come at 300 to 640 pixels and more, about 1.6 MB each
+    /// once decoded, while the largest one nxtch draws is 52 points (104 pixels on a Retina
+    /// screen). Decoding small also keeps the meter color pick and every redraw cheap.
+    nonisolated static func smallCover(_ data: Data) -> NSImage? {
+        let opts = [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true,
+                    kCGImageSourceShouldCacheImmediately: true, kCGImageSourceThumbnailMaxPixelSize: 160] as CFDictionary
+        guard let src = CGImageSourceCreateWithData(data as CFData, nil),
+              let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts) else { return nil }
+        return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+    }
+
     /// Takes an app's cover from its entry. macOS sometimes drops a cover for a moment in the
     /// middle of a song: then the one already showing stays, as long as the song is the same.
     private func takeCover(_ e: [String: Any], _ s: NowPlayingInfo, previous: NowPlayingInfo?, into covers: inout [String: Cover]) {
         guard let b = s.bundleID else { return }
         if let b64 = e["art"] as? String, let id = s.artID, b64.count < 12 << 20,
-           let data = Data(base64Encoded: b64), let image = NSImage(data: data) {
+           let data = Data(base64Encoded: b64), let image = Self.smallCover(data) {
             covers[b] = Cover(id: id, image: image, tint: image.vividColor)
             Log.audio.info("cover in: \(b, privacy: .public) \(data.count, privacy: .public) bytes")
         } else if let id = s.artID {
